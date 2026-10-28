@@ -189,6 +189,11 @@ export function loadUserStats(): UserStats {
         highScorePitchHero: parsed.highScorePitchHero ?? 1250,
         highScoreMatchNote: parsed.highScoreMatchNote ?? 940,
         highScoreInterval: parsed.highScoreInterval ?? 820,
+        highScorePitchRecognition: parsed.highScorePitchRecognition ?? 0,
+        highScoreEarProgression: parsed.highScoreEarProgression ?? 0,
+        earProgressionTierUnlocked: parsed.earProgressionTierUnlocked ?? 1,
+        earProgressionStars: parsed.earProgressionStars ?? { 1: 1 },
+        earProgressionXP: parsed.earProgressionXP ?? 120,
         sessions: parsed.sessions ?? [],
         gameRecords: parsed.gameRecords ?? [],
       };
@@ -207,6 +212,11 @@ export function loadUserStats(): UserStats {
     highScorePitchHero: 1250,
     highScoreMatchNote: 940,
     highScoreInterval: 820,
+    highScorePitchRecognition: 0,
+    highScoreEarProgression: 0,
+    earProgressionTierUnlocked: 1,
+    earProgressionStars: { 1: 1 },
+    earProgressionXP: 120,
     gameRecords: [
       {
         id: 'game-starter-1',
@@ -277,6 +287,10 @@ export function savePitchGameRecord(record: import('../types/vocal').PitchGameRe
     stats.highScoreInterval = Math.max(stats.highScoreInterval || 0, record.score);
   } else if (record.gameType === 'pitch_recognition') {
     stats.highScorePitchRecognition = Math.max(stats.highScorePitchRecognition || 0, record.score);
+  } else if (record.gameType === 'ear_progression') {
+    stats.highScoreEarProgression = Math.max(stats.highScoreEarProgression || 0, record.score);
+    // XP gained based on score
+    stats.earProgressionXP = (stats.earProgressionXP || 0) + record.score;
   }
 
   // Add practice minutes
@@ -284,6 +298,17 @@ export function savePitchGameRecord(record: import('../types/vocal').PitchGameRe
   stats.totalSessionsCompleted += 1;
   stats.lastPracticeDate = new Date().toISOString();
 
+  localStorage.setItem(LOCAL_STORAGE_STATS_KEY, JSON.stringify(stats));
+  return stats;
+}
+
+/**
+ * Update ear training progression unlocked tier & stars
+ */
+export function saveEarProgressionProgress(tier: number, stars: Record<number, number>): UserStats {
+  const stats = loadUserStats();
+  stats.earProgressionTierUnlocked = Math.max(stats.earProgressionTierUnlocked || 1, tier);
+  stats.earProgressionStars = { ...(stats.earProgressionStars || {}), ...stars };
   localStorage.setItem(LOCAL_STORAGE_STATS_KEY, JSON.stringify(stats));
   return stats;
 }

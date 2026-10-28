@@ -158,6 +158,28 @@ export interface Translations {
   selectCurriculum: string;
   coachThinking: string;
   getAiFeedback: string;
+  earProgressionTitle: string;
+  earProgressionDesc: string;
+  tier1Title: string;
+  tier1Desc: string;
+  tier2Title: string;
+  tier2Desc: string;
+  tier3Title: string;
+  tier3Desc: string;
+  tier4Title: string;
+  tier4Desc: string;
+  tier5Title: string;
+  tier5Desc: string;
+  lockedTier: string;
+  unlockedTier: string;
+  requiredAccuracy: string;
+  earXp: string;
+  currentRank: string;
+  playHarmonic: string;
+  playMelodic: string;
+  breakdownChord: string;
+  tierUnlockedToast: string;
+  startProgression: string;
 }
 
 export const translations: Record<AppLanguage, Translations> = {
@@ -319,6 +341,28 @@ export const translations: Record<AppLanguage, Translations> = {
     selectCurriculum: 'Curriculum Routine',
     coachThinking: 'AI Coach is analyzing...',
     getAiFeedback: 'Get AI Coach Analysis',
+    earProgressionTitle: 'Ear Training Progression Ladder',
+    earProgressionDesc: 'Climb from simple major scales to consonant intervals, complex chords, and dissonant tritones as your ear accuracy advances!',
+    tier1Title: 'Tier 1: Major Scales & Steps',
+    tier1Desc: 'Unisons, Major 2nds, and major scale stepwise degrees',
+    tier2Title: 'Tier 2: Consonant Harmonies',
+    tier2Desc: 'Major 3rds, Perfect 4ths, and Perfect 5ths',
+    tier3Title: 'Tier 3: Minor & Modal Intervals',
+    tier3Desc: 'Minor 3rds, Minor 6ths, and Major 6ths',
+    tier4Title: 'Tier 4: Complex Triads & 7th Chords',
+    tier4Desc: 'Major Triads, Minor Triads, Dominant 7ths, and Diminished Triads',
+    tier5Title: 'Tier 5: Dissonant Chords & Tritones',
+    tier5Desc: 'Tritone (Devil\'s Interval), Minor 2nds clash, and Major 7th tension',
+    lockedTier: 'Locked',
+    unlockedTier: 'Unlocked',
+    requiredAccuracy: 'Accuracy Required',
+    earXp: 'Ear XP',
+    currentRank: 'Ear Rank',
+    playHarmonic: 'Harmonic (Chord)',
+    playMelodic: 'Melodic (Arpeggio)',
+    breakdownChord: 'Deconstruct Notes',
+    tierUnlockedToast: 'New Ear Training Tier Unlocked!',
+    startProgression: 'Start Ear Progression',
   },
   ar: {
     appName: 'فوكال ماستر برو',
@@ -478,6 +522,28 @@ export const translations: Record<AppLanguage, Translations> = {
     selectCurriculum: 'البرنامج التدريبي',
     coachThinking: 'جاري استشارة المدرب الصوتي الذكي...',
     getAiFeedback: 'تحليل الأداء بالذكاء الاصطناعي',
+    earProgressionTitle: 'سلّم التدرج في تدريب الأذن الموسيقية',
+    earProgressionDesc: 'تدرج بالسمع من السلالم الكبيرة البسيطة إلى التوافقات والتآلفات المعقدة والتنافرات الموسيقية مع ارتفاع نسبة دقتك!',
+    tier1Title: 'المستوى 1: السلالم الكبيرة والخطوات',
+    tier1Desc: 'النغمات المتطابقة، الأوكتاف، والخطوات اللحنية للسلم الكبير',
+    tier2Title: 'المستوى 2: التوافقات المتآلفة المستقرة',
+    tier2Desc: 'البعد الثالث الكبير، والرابعة التامة، والخامسة التامة',
+    tier3Title: 'المستوى 3: المسافات الصغيرة والمقامات',
+    tier3Desc: 'البعد الثالث الصغير، والسادس الصغير، والسادس الكبير',
+    tier4Title: 'المستوى 4: التآلفات الثلاثية والسباعية',
+    tier4Desc: 'التآلفات الكبيرة والصغيرة والسابعة المهيمنة والناقصة',
+    tier5Title: 'المستوى 5: التنافرات الموسيقية والتريتون',
+    tier5Desc: 'التريتون (البعد المتنافر الشيطاني)، والثانية الصغيرة الصادمة، والسابعة الكبيرة الحادة',
+    lockedTier: 'مقفل',
+    unlockedTier: 'متاح للتدريب',
+    requiredAccuracy: 'الدقة المطلوبة لفتح المستوى',
+    earXp: 'نقاط الخبرة',
+    currentRank: 'الرتبة السمعية',
+    playHarmonic: 'عزف متزامن (كورد)',
+    playMelodic: 'عزف متسلسل (أربيجيو)',
+    breakdownChord: 'تفكيك النغمات بالترتيب',
+    tierUnlockedToast: 'مبارك! تم فتح مستوى تدريب سمعي جديد!',
+    startProgression: 'بدء سلّم تدريب الأذن',
   },
 };
 

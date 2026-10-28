@@ -283,6 +283,38 @@ class AudioEngine {
   }
 
   /**
+   * Play multiple notes as an acoustic chord (simultaneous or rolled arpeggio)
+   */
+  public async playChord(
+    midiNotes: number[],
+    durationSeconds: number = 2.2,
+    arpeggiated: boolean = false,
+    instrument?: InstrumentType
+  ): Promise<void> {
+    midiNotes.forEach((midi, idx) => {
+      const delay = arpeggiated ? idx * 0.12 : 0;
+      setTimeout(() => {
+        this.playNote(midi, durationSeconds, instrument);
+      }, delay * 1000);
+    });
+  }
+
+  /**
+   * Play an interval or scale sequence step-by-step
+   */
+  public async playSequence(
+    midiNotes: number[],
+    stepDurationMs: number = 380,
+    instrument?: InstrumentType
+  ): Promise<void> {
+    midiNotes.forEach((midi, i) => {
+      setTimeout(() => {
+        this.playNote(midi, 1.2, instrument);
+      }, i * stepDurationMs);
+    });
+  }
+
+  /**
    * Realistic Concert Grand Piano Model:
    * - Percussive hammer-strike transient (filtered noise burst at 320Hz)
    * - Unison 2-string beating (+0.35 cents)

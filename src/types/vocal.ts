@@ -84,7 +84,7 @@ export interface PracticeSessionRecord {
 
 export interface PitchGameRecord {
   id: string;
-  gameType: 'pitch_hero' | 'match_note' | 'interval_challenge' | 'ear_trainer' | 'siren_glide' | 'vocal_agility' | 'pitch_recognition';
+  gameType: 'pitch_hero' | 'match_note' | 'interval_challenge' | 'ear_trainer' | 'siren_glide' | 'vocal_agility' | 'pitch_recognition' | 'ear_progression';
   score: number;
   highestStreak: number;
   accuracyPercentage: number;
@@ -104,6 +104,10 @@ export interface UserStats {
   highScoreMatchNote: number;
   highScoreInterval: number;
   highScorePitchRecognition?: number;
+  highScoreEarProgression?: number;
+  earProgressionTierUnlocked?: number;
+  earProgressionStars?: Record<number, number>;
+  earProgressionXP?: number;
   sessions: PracticeSessionRecord[];
   gameRecords: PitchGameRecord[];
 }
