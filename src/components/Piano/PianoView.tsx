@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Smartphone, Monitor, Maximize2, Minimize2, Sliders, Volume2, Globe, Music } from 'lucide-react';
-import { VocalRangeProfile, PitchDetectionResult, AppLanguage, NotationSystem, InstrumentType } from '../../types/vocal';
+import { Smartphone, Monitor, Maximize2, Minimize2, Sliders, Volume2, Globe, Music, Palette } from 'lucide-react';
+import { VocalRangeProfile, PitchDetectionResult, AppLanguage, NotationSystem, InstrumentType, AppTheme } from '../../types/vocal';
 import { VerticalPiano } from './VerticalPiano';
 import { HorizontalPiano } from './HorizontalPiano';
 import { translations, INSTRUMENT_NAMES, NOTATION_OPTIONS } from '../../utils/i18n';
+import { THEMES } from '../../utils/theme';
 import { audioEngine } from '../../audio/audioEngine';
 import { haptics } from '../../utils/haptics';
 
@@ -13,11 +14,13 @@ interface PianoViewProps {
   language?: AppLanguage;
   notation?: NotationSystem;
   instrument?: InstrumentType;
+  theme?: AppTheme;
   autoVerticalOnFullscreen?: boolean;
   onSelectRangeProfile?: (profile: VocalRangeProfile) => void;
   targetMidi?: number | null;
   onChangeNotation?: (notation: NotationSystem) => void;
   onChangeInstrument?: (instrument: InstrumentType) => void;
+  onChangeTheme?: (theme: AppTheme) => void;
   onOpenSettings?: () => void;
 }
 
@@ -27,18 +30,21 @@ export const PianoView: React.FC<PianoViewProps> = ({
   language = 'en',
   notation = 'english',
   instrument = 'piano',
+  theme = 'classic-piano',
   autoVerticalOnFullscreen = true,
   onSelectRangeProfile,
   targetMidi,
   onChangeNotation,
   onChangeInstrument,
+  onChangeTheme,
   onOpenSettings,
 }) => {
   const t = translations[language];
-  const [orientation, setOrientation] = useState<'vertical' | 'horizontal'>('vertical');
+  const [orientation, setOrientation] = useState<'vertical' | 'horizontal'>('horizontal'); // Default horizontal so the Real Piano photo layout is immediately front & center
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showInstrumentMenu, setShowInstrumentMenu] = useState(false);
   const [showNotationMenu, setShowNotationMenu] = useState(false);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
 
   // Monitor browser fullscreen changes
   useEffect(() => {
@@ -76,7 +82,6 @@ export const PianoView: React.FC<PianoViewProps> = ({
         }
       }
     } catch {
-      // Fallback to internal fullscreen container state
       setIsFullscreen((prev) => {
         const next = !prev;
         if (next && autoVerticalOnFullscreen) {
@@ -94,8 +99,7 @@ export const PianoView: React.FC<PianoViewProps> = ({
       onChangeInstrument(inst);
     }
     setShowInstrumentMenu(false);
-    // Play audition note
-    audioEngine.playTone(440, 0.4);
+    audioEngine.playTone(440, 0.5);
   };
 
   const handleSelectNotation = (not: NotationSystem) => {
@@ -106,11 +110,19 @@ export const PianoView: React.FC<PianoViewProps> = ({
     setShowNotationMenu(false);
   };
 
+  const handleSelectTheme = (th: AppTheme) => {
+    haptics.tap();
+    if (onChangeTheme) {
+      onChangeTheme(th);
+    }
+    setShowThemeMenu(false);
+  };
+
   return (
     <div className={`flex flex-col gap-2.5 ${isFullscreen ? 'fixed inset-0 z-50 bg-[#090d16] p-2' : ''}`}>
       {/* Top Layout & Control Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        {/* Left: Quick instrument & notation quick switch */}
+        {/* Left: Quick instrument, notation, & theme pills */}
         <div className="flex items-center gap-1.5 relative">
           {/* Instrument Pill */}
           <div className="relative">
@@ -118,8 +130,9 @@ export const PianoView: React.FC<PianoViewProps> = ({
               onClick={() => {
                 setShowInstrumentMenu(!showInstrumentMenu);
                 setShowNotationMenu(false);
+                setShowThemeMenu(false);
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 hover:text-white hover:bg-slate-800 transition"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 hover:text-white hover:bg-slate-800 transition shadow-sm"
               title={t.instrumentLabel}
             >
               <span>{INSTRUMENT_NAMES[instrument]?.icon}</span>
@@ -129,7 +142,7 @@ export const PianoView: React.FC<PianoViewProps> = ({
             </button>
 
             {showInstrumentMenu && (
-              <div className="absolute top-full mt-1.5 left-0 z-50 w-52 bg-slate-900 border border-slate-700/80 rounded-2xl p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-1">
+              <div className="absolute top-full mt-1.5 left-0 z-50 w-56 bg-slate-900 border border-slate-700/80 rounded-2xl p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-1">
                 <div className="text-[10px] uppercase font-bold text-slate-400 px-2.5 py-1 border-b border-slate-800">
                   {t.instrumentLabel}
                 </div>
@@ -162,8 +175,9 @@ export const PianoView: React.FC<PianoViewProps> = ({
               onClick={() => {
                 setShowNotationMenu(!showNotationMenu);
                 setShowInstrumentMenu(false);
+                setShowThemeMenu(false);
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 hover:text-white hover:bg-slate-800 transition"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 hover:text-white hover:bg-slate-800 transition shadow-sm"
               title={t.notationLabel}
             >
               <Music className="w-3.5 h-3.5 text-indigo-400" />
@@ -201,12 +215,72 @@ export const PianoView: React.FC<PianoViewProps> = ({
               </div>
             )}
           </div>
+
+          {/* Theme Pill */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowThemeMenu(!showThemeMenu);
+                setShowInstrumentMenu(false);
+                setShowNotationMenu(false);
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 hover:text-white hover:bg-slate-800 transition shadow-sm"
+              title={t.themesLabel}
+            >
+              <Palette className="w-3.5 h-3.5 text-pink-400" />
+              <span className="font-semibold text-[11px] hidden sm:inline">
+                {THEMES[theme]?.[language === 'ar' ? 'nameAr' : 'nameEn']}
+              </span>
+            </button>
+
+            {showThemeMenu && (
+              <div className="absolute top-full mt-1.5 left-0 z-50 w-60 bg-slate-900 border border-slate-700/80 rounded-2xl p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-1">
+                <div className="text-[10px] uppercase font-bold text-slate-400 px-2.5 py-1 border-b border-slate-800">
+                  {t.themesLabel}
+                </div>
+                {(Object.keys(THEMES) as AppTheme[]).map((themeKey) => {
+                  const th = THEMES[themeKey];
+                  const isSelected = theme === themeKey;
+                  return (
+                    <button
+                      key={themeKey}
+                      onClick={() => handleSelectTheme(themeKey)}
+                      className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs text-left transition ${
+                        isSelected
+                          ? 'bg-pink-500/20 text-pink-300 font-bold border border-pink-500/30'
+                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      }`}
+                    >
+                      <span>{th.icon}</span>
+                      <span className="flex-1">{language === 'ar' ? th.nameAr : th.nameEn}</span>
+                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-pink-400" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right: Layout switcher (Vertical vs Horizontal) + Fullscreen */}
         <div className="flex items-center gap-1.5 ml-auto">
           {/* Orientation switch */}
           <div className="flex bg-slate-900 p-0.5 rounded-xl border border-slate-800 text-xs">
+            <button
+              onClick={() => {
+                haptics.tap();
+                setOrientation('horizontal');
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold transition ${
+                orientation === 'horizontal'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title={t.horizontalPiano}
+            >
+              <Monitor className="w-3.5 h-3.5" />
+              <span className="text-[11px]">{language === 'ar' ? 'أفقي (صورة البيانو)' : 'Horizontal'}</span>
+            </button>
             <button
               onClick={() => {
                 haptics.tap();
@@ -220,22 +294,7 @@ export const PianoView: React.FC<PianoViewProps> = ({
               title={t.verticalPiano}
             >
               <Smartphone className="w-3.5 h-3.5" />
-              <span className="text-[11px]">{language === 'ar' ? 'رأسي' : 'Vertical'}</span>
-            </button>
-            <button
-              onClick={() => {
-                haptics.tap();
-                setOrientation('horizontal');
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold transition ${
-                orientation === 'horizontal'
-                  ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title={t.horizontalPiano}
-            >
-              <Monitor className="w-3.5 h-3.5" />
-              <span className="text-[11px]">{language === 'ar' ? 'أفقي' : 'Horizontal'}</span>
+              <span className="text-[11px]">{language === 'ar' ? 'رأسي (أندرويد)' : 'Vertical'}</span>
             </button>
           </div>
 
@@ -274,6 +333,7 @@ export const PianoView: React.FC<PianoViewProps> = ({
           currentPitch={currentPitch}
           language={language}
           notation={notation}
+          theme={theme}
           onSelectRangeProfile={onSelectRangeProfile}
           targetMidi={targetMidi}
           isFullscreen={isFullscreen}
@@ -285,6 +345,7 @@ export const PianoView: React.FC<PianoViewProps> = ({
           currentPitch={currentPitch}
           language={language}
           notation={notation}
+          theme={theme}
           onSelectRangeProfile={onSelectRangeProfile}
         />
       )}

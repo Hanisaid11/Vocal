@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Square, SkipForward, Volume2, Mic, Activity, CheckCircle2, RotateCcw, Flame } from 'lucide-react';
-import { WarmupExercise, VocalRangeProfile, PitchDetectionResult, PracticeSessionRecord } from '../../types/vocal';
-import { midiToNoteInfo } from '../../utils/noteUtils';
+import { WarmupExercise, VocalRangeProfile, PitchDetectionResult, PracticeSessionRecord, AppLanguage, NotationSystem } from '../../types/vocal';
+import { midiToNoteInfo, formatNoteName } from '../../utils/noteUtils';
 import { audioEngine } from '../../audio/audioEngine';
+import { translations } from '../../utils/i18n';
 import { haptics } from '../../utils/haptics';
 
 interface ExercisePlayerProps {
   exercise: WarmupExercise;
   profile: VocalRangeProfile;
   currentPitch: PitchDetectionResult | null;
+  language?: AppLanguage;
+  notation?: NotationSystem;
   onFinishSession: (session: PracticeSessionRecord) => void;
   onClose: () => void;
 }
@@ -17,9 +20,12 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   exercise,
   profile,
   currentPitch,
+  language = 'en',
+  notation = 'english',
   onFinishSession,
   onClose,
 }) => {
+  const t = translations[language];
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(exercise.defaultBpm || 90);
   const [currentRootMidi, setCurrentRootMidi] = useState(profile.middleRegisterNote.midi);
@@ -189,16 +195,16 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
           }`}
         />
 
-        <div className="text-[11px] uppercase tracking-wider text-slate-400 mb-1">Current Pitch Target</div>
+        <div className="text-[11px] uppercase tracking-wider text-slate-400 mb-1">{t.target}</div>
         <div className="text-6xl font-black tracking-tight text-white font-mono-numbers">
-          {currentTargetNote.fullName}
+          {formatNoteName(currentTargetNote, notation)}
         </div>
 
         {/* Live Sung Pitch Comparison */}
         <div className="mt-4 flex items-center gap-3">
           <div className="text-xs text-slate-400 flex items-center gap-1.5">
             <Mic className="w-3.5 h-3.5 text-cyan-400" />
-            <span>You:</span>
+            <span>{language === 'ar' ? 'صوتك:' : 'You:'}</span>
           </div>
 
           {currentPitch?.note ? (
@@ -209,7 +215,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
                   : 'bg-slate-800 border-slate-700 text-amber-400'
               }`}
             >
-              {currentPitch.note.fullName} ({currentPitch.cents > 0 ? `+${currentPitch.cents}` : currentPitch.cents}¢)
+              {formatNoteName(currentPitch.note, notation)} ({currentPitch.cents > 0 ? `+${currentPitch.cents}` : currentPitch.cents}¢)
             </div>
           ) : (
             <span className="text-xs text-slate-500 italic">Sing along with piano...</span>

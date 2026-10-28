@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Sliders, X, Check, Volume2, Globe, Music, Smartphone, Shield, Zap, RefreshCw } from 'lucide-react';
+import { Sliders, X, Check, Volume2, Globe, Music, Smartphone, Shield, Zap, RefreshCw, Palette } from 'lucide-react';
 import { AppSettings, saveAppSettings } from '../../utils/storage';
-import { AppLanguage, NotationSystem, InstrumentType } from '../../types/vocal';
+import { AppLanguage, NotationSystem, InstrumentType, AppTheme } from '../../types/vocal';
 import { translations, INSTRUMENT_NAMES, NOTATION_OPTIONS } from '../../utils/i18n';
+import { THEMES } from '../../utils/theme';
 import { audioEngine } from '../../audio/audioEngine';
 import { haptics } from '../../utils/haptics';
 
@@ -195,7 +196,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        {/* 4. Fullscreen behavior & Haptics */}
+        {/* 4. Visual Piano Themes */}
+        <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+          <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+            <Palette className="w-3.5 h-3.5 text-pink-400" />
+            <span>{t.themesLabel}</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {(Object.keys(THEMES) as AppTheme[]).map((key) => {
+              const th = THEMES[key];
+              const isSelected = current.theme === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => {
+                    haptics.tap();
+                    handleChange({ theme: key });
+                  }}
+                  className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition ${
+                    isSelected
+                      ? 'bg-pink-500/20 border-pink-400 text-pink-200 font-bold'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span className="text-base">{th.icon}</span>
+                  <span className="text-xs font-bold flex-1">{current.language === 'ar' ? th.nameAr : th.nameEn}</span>
+                  {isSelected && <Check className="w-3.5 h-3.5 text-pink-400" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 5. Fullscreen behavior & Haptics */}
         <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-3 text-xs">
           {/* Auto-Vertical Fullscreen Switch */}
           <div className="flex items-center justify-between">

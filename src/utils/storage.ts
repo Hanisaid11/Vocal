@@ -25,6 +25,7 @@ export interface AppSettings {
   language: import('../types/vocal').AppLanguage;
   notation: import('../types/vocal').NotationSystem;
   instrument: import('../types/vocal').InstrumentType;
+  theme: import('../types/vocal').AppTheme;
   autoVerticalOnFullscreen: boolean;
 }
 
@@ -40,6 +41,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language: 'en',
   notation: 'english',
   instrument: 'piano',
+  theme: 'classic-piano',
   autoVerticalOnFullscreen: true,
 };
 
@@ -273,6 +275,8 @@ export function savePitchGameRecord(record: import('../types/vocal').PitchGameRe
     stats.highScoreMatchNote = Math.max(stats.highScoreMatchNote || 0, record.score);
   } else if (record.gameType === 'interval_challenge') {
     stats.highScoreInterval = Math.max(stats.highScoreInterval || 0, record.score);
+  } else if (record.gameType === 'pitch_recognition') {
+    stats.highScorePitchRecognition = Math.max(stats.highScorePitchRecognition || 0, record.score);
   }
 
   // Add practice minutes

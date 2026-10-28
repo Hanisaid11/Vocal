@@ -12,9 +12,11 @@ import { VoiceProfiler } from './components/Profiler/VoiceProfiler';
 import { PitchGamesHub } from './components/Games/PitchGamesHub';
 import { WarmupRoutines } from './components/Exercises/WarmupRoutines';
 import { PitchTrainer } from './components/Training/PitchTrainer';
+import { AIVocalCoach } from './components/Training/AIVocalCoach';
 import { AnalyticsDashboard } from './components/Analytics/AnalyticsDashboard';
 import { DriveSyncModal } from './components/Sync/DriveSyncModal';
 import { SettingsModal } from './components/Settings/SettingsModal';
+import { Sparkles, Target } from 'lucide-react';
 
 import {
   VocalRangeProfile,
@@ -25,6 +27,7 @@ import {
   AppLanguage,
   NotationSystem,
   InstrumentType,
+  AppTheme,
 } from './types/vocal';
 import { audioEngine } from './audio/audioEngine';
 import {
@@ -50,6 +53,7 @@ export default function App() {
   const [currentPitch, setCurrentPitch] = useState<PitchDetectionResult | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [trainerSubMode, setTrainerSubMode] = useState<'ai_coach' | 'free_tuner'>('ai_coach');
 
   const t = translations[settings.language];
 
@@ -144,6 +148,13 @@ export default function App() {
     saveSettings(updated);
   };
 
+  // Quick Change Theme
+  const handleChangeTheme = (theme: AppTheme) => {
+    const updated = { ...settings, theme };
+    setSettings(updated);
+    saveSettings(updated);
+  };
+
   // Save new profile from Voice Profiler
   const handleSaveProfile = async (newProfile: VocalRangeProfile) => {
     await saveVocalProfile(newProfile);
@@ -192,10 +203,12 @@ export default function App() {
               language={settings.language}
               notation={settings.notation}
               instrument={settings.instrument}
+              theme={settings.theme}
               autoVerticalOnFullscreen={settings.autoVerticalOnFullscreen}
               onSelectRangeProfile={handleSaveProfile}
               onChangeNotation={handleChangeNotation}
               onChangeInstrument={handleChangeInstrument}
+              onChangeTheme={handleChangeTheme}
               onOpenSettings={() => setIsSettingsOpen(true)}
             />
 
@@ -216,8 +229,8 @@ export default function App() {
 
               <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-2xl flex items-center justify-between">
                 <div>
-                  <h3 className="font-bold text-white">{t.pitchHeroTitle}</h3>
-                  <p className="text-slate-400 text-[11px] mt-0.5">{settings.language === 'ar' ? 'ألعاب تدريب النبرة والأذن' : 'Ear & pitch training arena'}</p>
+                  <h3 className="font-bold text-white">{t.earTrainerTitle}</h3>
+                  <p className="text-slate-400 text-[11px] mt-0.5">{settings.language === 'ar' ? 'تدريب الأذن وخمن النغمة' : 'Ear training & guess pitch'}</p>
                 </div>
                 <button
                   onClick={() => setActiveTab('games')}
@@ -261,6 +274,7 @@ export default function App() {
             stats={stats}
             language={settings.language}
             notation={settings.notation}
+            theme={settings.theme}
             onRecordGameSession={handleRecordGameSession}
           />
         )}
@@ -269,22 +283,66 @@ export default function App() {
           <WarmupRoutines
             profile={profile}
             currentPitch={currentPitch}
+            language={settings.language}
+            notation={settings.notation}
             onSessionComplete={handleRecordSession}
           />
         )}
 
         {activeTab === 'trainer' && (
-          <PitchTrainer
-            profile={profile}
-            currentPitch={currentPitch}
-            onRecordSession={handleRecordSession}
-          />
+          <div className="flex flex-col gap-3">
+            {/* Trainer Submode Switcher */}
+            <div className="flex items-center justify-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-2xl max-w-md mx-auto w-full">
+              <button
+                onClick={() => setTrainerSubMode('ai_coach')}
+                className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                  trainerSubMode === 'ai_coach'
+                    ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+                <span>{t.aiTrainerStepByStep}</span>
+              </button>
+              <button
+                onClick={() => setTrainerSubMode('free_tuner')}
+                className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                  trainerSubMode === 'free_tuner'
+                    ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Target className="w-3.5 h-3.5 text-amber-300" />
+                <span>{settings.language === 'ar' ? 'شريط مدوزن النغمات' : 'Pitch Matcher'}</span>
+              </button>
+            </div>
+
+            {trainerSubMode === 'ai_coach' ? (
+              <AIVocalCoach
+                profile={profile}
+                currentPitch={currentPitch}
+                language={settings.language}
+                notation={settings.notation}
+                onRecordSession={handleRecordSession}
+              />
+            ) : (
+              <PitchTrainer
+                profile={profile}
+                currentPitch={currentPitch}
+                language={settings.language}
+                notation={settings.notation}
+                onRecordSession={handleRecordSession}
+              />
+            )}
+          </div>
         )}
 
         {activeTab === 'analytics' && (
           <AnalyticsDashboard
             stats={stats}
             profile={profile}
+            language={settings.language}
+            notation={settings.notation}
           />
         )}
       </main>

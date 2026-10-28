@@ -36,4 +36,26 @@ export const haptics = {
       }
     }
   },
+
+  // Lost streak pattern
+  streakLost: () => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([40, 30, 40]);
+      } catch {
+        // Ignore
+      }
+    }
+  },
+
+  // Celebratory victory pattern for completed streak/workout
+  streakWon: () => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([20, 40, 20, 40, 60]);
+      } catch {
+        // Ignore
+      }
+    }
+  },
 };

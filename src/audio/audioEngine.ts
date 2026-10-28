@@ -1,8 +1,17 @@
-import { PitchDetectionResult } from '../types/vocal';
+import { PitchDetectionResult, InstrumentType } from '../types/vocal';
 import { frequencyToNote } from '../utils/noteUtils';
 import { PitchDetector } from './pitchDetection';
 
 export type PitchCallback = (result: PitchDetectionResult) => void;
+
+export interface RecordedNote {
+  midi: number;
+  frequency: number;
+  startTime: number; // offset ms from recording start
+  duration: number;  // ms
+}
+
+export type RecordingStateCallback = (isRecording: boolean, isPlaying: boolean, notesCount: number) => void;
 
 class AudioEngine {
   private audioCtx: AudioContext | null = null;
@@ -13,21 +22,29 @@ class AudioEngine {
   private isListening = false;
   private animationFrameId: number | null = null;
   private pitchListeners: Set<PitchCallback> = new Set();
+  private recordingListeners: Set<RecordingStateCallback> = new Set();
 
   private timeBuffer: Float32Array<ArrayBuffer> | null = null;
   private freqBuffer: Uint8Array<ArrayBuffer> | null = null;
 
   // Master output gain for synthesizer
   private synthGain: GainNode | null = null;
-  private currentInstrument: import('../types/vocal').InstrumentType = 'piano';
+  private currentInstrument: InstrumentType = 'piano';
   private referencePitchA4 = 440;
   private tuningToleranceCents = 12;
 
-  public setInstrument(inst: import('../types/vocal').InstrumentType) {
+  // Key Recording & Playback
+  private isRecordingActive = false;
+  private isPlaybackActive = false;
+  private recordingStartTime = 0;
+  private recordedNotesList: RecordedNote[] = [];
+  private playbackTimeouts: number[] = [];
+
+  public setInstrument(inst: InstrumentType) {
     this.currentInstrument = inst;
   }
 
-  public getInstrument(): import('../types/vocal').InstrumentType {
+  public getInstrument(): InstrumentType {
     return this.currentInstrument;
   }
 
@@ -55,9 +72,20 @@ class AudioEngine {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.audioCtx = new AudioContextClass({ latencyHint: 'interactive' });
 
+      // Master gain
       this.synthGain = this.audioCtx.createGain();
-      this.synthGain.gain.setValueAtTime(0.7, this.audioCtx.currentTime);
-      this.synthGain.connect(this.audioCtx.destination);
+      this.synthGain.gain.setValueAtTime(0.75, this.audioCtx.currentTime);
+
+      // Master soft limiter / compressor to prevent clipping on chords
+      const compressor = this.audioCtx.createDynamicsCompressor();
+      compressor.threshold.setValueAtTime(-4, this.audioCtx.currentTime);
+      compressor.knee.setValueAtTime(12, this.audioCtx.currentTime);
+      compressor.ratio.setValueAtTime(4, this.audioCtx.currentTime);
+      compressor.attack.setValueAtTime(0.003, this.audioCtx.currentTime);
+      compressor.release.setValueAtTime(0.15, this.audioCtx.currentTime);
+
+      this.synthGain.connect(compressor);
+      compressor.connect(this.audioCtx.destination);
     }
 
     if (this.audioCtx.state === 'suspended') {
@@ -78,8 +106,6 @@ class AudioEngine {
         return true;
       }
 
-      // Android & mobile-friendly constraints
-      // Note: noiseSuppression is set to false by default for vocal clarity
       const constraints: MediaStreamConstraints = {
         audio: {
           echoCancellation: false,
@@ -98,7 +124,7 @@ class AudioEngine {
 
       this.analyser = ctx.createAnalyser();
       this.analyser.fftSize = 2048;
-      this.analyser.smoothingTimeConstant = 0.05; // Quick response for live pitch
+      this.analyser.smoothingTimeConstant = 0.05;
 
       this.micSource = ctx.createMediaStreamSource(this.micStream);
       this.micSource.connect(this.analyser);
@@ -130,21 +156,16 @@ class AudioEngine {
       this.animationFrameId = null;
     }
 
-    if (this.micSource) {
-      this.micSource.disconnect();
-      this.micSource = null;
-    }
-
     if (this.micStream) {
       this.micStream.getTracks().forEach((track) => track.stop());
       this.micStream = null;
     }
 
-    if (this.pitchDetector) {
-      this.pitchDetector.reset();
+    if (this.micSource) {
+      this.micSource.disconnect();
+      this.micSource = null;
     }
 
-    // Broadcast silence
     this.notifyListeners({
       frequency: null,
       note: null,
@@ -161,9 +182,6 @@ class AudioEngine {
     return this.isListening;
   }
 
-  /**
-   * Subscribe to real-time pitch updates
-   */
   public subscribe(cb: PitchCallback): () => void {
     this.pitchListeners.add(cb);
     return () => {
@@ -175,9 +193,6 @@ class AudioEngine {
     this.pitchListeners.forEach((cb) => cb(result));
   }
 
-  /**
-   * High performance continuous detection loop
-   */
   private runDetectionLoop = () => {
     if (!this.isListening || !this.analyser || !this.pitchDetector || !this.timeBuffer || !this.freqBuffer) {
       return;
@@ -216,196 +231,532 @@ class AudioEngine {
   };
 
   /**
-   * Synthesize acoustic vocal reference tone with selectable instrument timbres
+   * High-Fidelity Acoustic Tone Synthesis
+   * Models real concert grand piano with hammer-strike noise, inharmonic partial decay, and soundboard resonance;
+   * and authentic Arabic Oud with twin paired strings, risha transient, and Kas'ah bowl resonance.
    */
   public async playTone(
     frequency: number,
-    durationSeconds: number = 1.0,
-    instrument?: import('../types/vocal').InstrumentType
-  ) {
+    durationSeconds: number = 1.2,
+    instrument?: InstrumentType,
+    midiNote?: number
+  ): Promise<number> {
     const type = instrument || this.currentInstrument || 'piano';
     const ctx = await this.getAudioContext();
     const now = ctx.currentTime;
 
-    const masterNoteGain = ctx.createGain();
-    masterNoteGain.gain.setValueAtTime(0.0001, now);
+    // Track in recording if active
+    if (this.isRecordingActive && midiNote) {
+      const offsetMs = Date.now() - this.recordingStartTime;
+      this.recordedNotesList.push({
+        midi: midiNote,
+        frequency,
+        startTime: offsetMs,
+        duration: durationSeconds * 1000,
+      });
+      this.notifyRecordingListeners();
+    }
 
-    // Instrument Filter
+    if (type === 'oud') {
+      return this.synthesizeRealOud(ctx, now, frequency, durationSeconds);
+    } else if (type === 'guitar') {
+      return this.synthesizeRealGuitar(ctx, now, frequency, durationSeconds);
+    } else if (type === 'vocal') {
+      return this.synthesizeRealVocal(ctx, now, frequency, durationSeconds);
+    } else if (type === 'strings') {
+      return this.synthesizeRealStrings(ctx, now, frequency, durationSeconds);
+    } else {
+      return this.synthesizeRealGrandPiano(ctx, now, frequency, durationSeconds);
+    }
+  }
+
+  /**
+   * Helper to play note by MIDI number directly
+   */
+  public async playNote(
+    midiNote: number,
+    durationSeconds: number = 1.5,
+    instrument?: InstrumentType
+  ): Promise<number> {
+    const frequency = this.referencePitchA4 * Math.pow(2, (midiNote - 69) / 12);
+    return this.playTone(frequency, durationSeconds, instrument, midiNote);
+  }
+
+  /**
+   * Realistic Concert Grand Piano Model:
+   * - Percussive hammer-strike transient (filtered noise burst at 320Hz)
+   * - Unison 2-string beating (+0.35 cents)
+   * - 5 Inharmonic physical partials with multi-tier decay
+   * - Soundboard spruce cabinet resonance (140Hz & 780Hz)
+   */
+  private synthesizeRealGrandPiano(ctx: AudioContext, now: number, freq: number, duration: number): number {
+    const noteGain = ctx.createGain();
+
+    // Calculate realistic acoustic grand piano ring duration:
+    // Natural acoustic grand strings resonate freely for 4 to 9.5 seconds depending on register!
+    const naturalRingTime = Math.max(
+      duration,
+      Math.min(9.5, 7.8 * Math.pow(110 / Math.max(27.5, freq), 0.36))
+    );
+
+    // Master envelope for whole note: realistic acoustic decay
+    noteGain.gain.setValueAtTime(0.0001, now);
+    noteGain.gain.linearRampToValueAtTime(0.95, now + 0.004); // Instant hammer strike
+    noteGain.gain.exponentialRampToValueAtTime(0.68, now + 0.15); // Initial strike settles into long singing bloom
+    noteGain.gain.exponentialRampToValueAtTime(0.32, now + naturalRingTime * 0.42); // Warm sustained acoustic ring
+    noteGain.gain.exponentialRampToValueAtTime(0.00005, now + naturalRingTime); // Natural fade out
+
+    // Soundboard cabinet acoustic resonance filter (spruce body resonance)
+    const soundboard = ctx.createBiquadFilter();
+    soundboard.type = 'peaking';
+    soundboard.frequency.setValueAtTime(140, now);
+    soundboard.Q.setValueAtTime(1.8, now);
+    soundboard.gain.setValueAtTime(3.8, now);
+
+    const soundboardHigh = ctx.createBiquadFilter();
+    soundboardHigh.type = 'peaking';
+    soundboardHigh.frequency.setValueAtTime(780, now);
+    soundboardHigh.Q.setValueAtTime(1.5, now);
+    soundboardHigh.gain.setValueAtTime(2.2, now);
+
+    // String Inharmonicity Constant B
+    const B = 0.00028;
+    const partials = [
+      { n: 1, amp: 1.0, decayMult: 1.0 },
+      { n: 2, amp: 0.65, decayMult: 0.88 },
+      { n: 3, amp: 0.42, decayMult: 0.70 },
+      { n: 4, amp: 0.24, decayMult: 0.52 },
+      { n: 5, amp: 0.14, decayMult: 0.38 },
+      { n: 6, amp: 0.07, decayMult: 0.26 },
+    ];
+
+    // Hammer Strike Noise Transient (14ms felt thump)
+    const noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.02), ctx.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseData.length; i++) {
+      noiseData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.004));
+    }
+    const hammerSource = ctx.createBufferSource();
+    hammerSource.buffer = noiseBuffer;
+    const hammerFilter = ctx.createBiquadFilter();
+    hammerFilter.type = 'bandpass';
+    hammerFilter.frequency.setValueAtTime(320, now);
+    hammerFilter.Q.setValueAtTime(2.5, now);
+    const hammerGain = ctx.createGain();
+    hammerGain.gain.setValueAtTime(0.28, now);
+    hammerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
+
+    hammerSource.connect(hammerFilter);
+    hammerFilter.connect(hammerGain);
+    hammerGain.connect(noteGain);
+    hammerSource.start(now);
+
+    // String Oscillators
+    partials.forEach((p) => {
+      const partialFreq = p.n * freq * Math.sqrt(1 + B * p.n * p.n);
+      if (partialFreq > 14000) return;
+
+      // Primary string oscillator
+      const osc = ctx.createOscillator();
+      osc.type = p.n === 1 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(partialFreq, now);
+
+      const pGain = ctx.createGain();
+      const peakAmp = p.amp * 0.44;
+      pGain.gain.setValueAtTime(0.0001, now);
+      pGain.gain.linearRampToValueAtTime(peakAmp, now + 0.004); // Instant hammer strike attack
+
+      // Exponential decay: upper harmonics die out faster while fundamental rings long
+      const pDecayTime = naturalRingTime * p.decayMult;
+      pGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peakAmp * 0.35), now + 0.15);
+      pGain.gain.exponentialRampToValueAtTime(0.00005, now + pDecayTime);
+
+      osc.connect(pGain);
+      pGain.connect(soundboard);
+      osc.start(now);
+      osc.stop(now + pDecayTime + 0.1);
+
+      // Unison double-string chorus on fundamental (piano 3-string acoustic beating)
+      if (p.n === 1) {
+        const unisonOsc = ctx.createOscillator();
+        unisonOsc.type = 'sine';
+        unisonOsc.frequency.setValueAtTime(freq * 1.00035, now); // +0.35 cents detune
+
+        const uGain = ctx.createGain();
+        uGain.gain.setValueAtTime(0.0001, now);
+        uGain.gain.linearRampToValueAtTime(peakAmp * 0.65, now + 0.005);
+        uGain.gain.exponentialRampToValueAtTime(0.00005, now + naturalRingTime);
+
+        unisonOsc.connect(uGain);
+        uGain.connect(soundboard);
+        unisonOsc.start(now);
+        unisonOsc.stop(now + naturalRingTime + 0.1);
+      }
+    });
+
+    soundboard.connect(soundboardHigh);
+    soundboardHigh.connect(noteGain);
+
+    noteGain.connect(this.synthGain || ctx.destination);
+    return naturalRingTime;
+  }
+
+  /**
+   * Realistic Arabic Oud (العود العربي الأصيل):
+   * - Authentic double-course paired strings with microscopic acoustic detuning (±1.2 cents)
+   * - Sharp plectrum (Risha / ريشة) pluck noise click
+   * - Deep Kas'ah wooden bowl body formant filters (210Hz air cavity, 580Hz belly, 1150Hz nasal projection)
+   */
+  private synthesizeRealOud(ctx: AudioContext, now: number, freq: number, duration: number): number {
+    const noteGain = ctx.createGain();
+    noteGain.gain.setValueAtTime(0.0001, now);
+
+    // Risha (plectrum) pluck transient
+    const rishaBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.012), ctx.sampleRate);
+    const rishaData = rishaBuffer.getChannelData(0);
+    for (let i = 0; i < rishaData.length; i++) {
+      rishaData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.002));
+    }
+    const rishaSource = ctx.createBufferSource();
+    rishaSource.buffer = rishaBuffer;
+    const rishaFilter = ctx.createBiquadFilter();
+    rishaFilter.type = 'bandpass';
+    rishaFilter.frequency.setValueAtTime(2400, now);
+    rishaFilter.Q.setValueAtTime(3.0, now);
+    const rishaGain = ctx.createGain();
+    rishaGain.gain.setValueAtTime(0.4, now);
+    rishaGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.012);
+
+    rishaSource.connect(rishaFilter);
+    rishaFilter.connect(rishaGain);
+    rishaGain.connect(noteGain);
+    rishaSource.start(now);
+
+    // Kas'ah 3-Band Wooden Bowl Body Resonator
+    const bowlLow = ctx.createBiquadFilter();
+    bowlLow.type = 'peaking';
+    bowlLow.frequency.setValueAtTime(210, now); // air cavity
+    bowlLow.Q.setValueAtTime(2.2, now);
+    bowlLow.gain.setValueAtTime(6.0, now);
+
+    const bowlMid = ctx.createBiquadFilter();
+    bowlMid.type = 'peaking';
+    bowlMid.frequency.setValueAtTime(580, now); // soundboard wood
+    bowlMid.Q.setValueAtTime(2.5, now);
+    bowlMid.gain.setValueAtTime(5.5, now);
+
+    const bowlHigh = ctx.createBiquadFilter();
+    bowlHigh.type = 'peaking';
+    bowlHigh.frequency.setValueAtTime(1150, now); // nasal projection
+    bowlHigh.Q.setValueAtTime(2.0, now);
+    bowlHigh.gain.setValueAtTime(4.0, now);
+
+    // Double-Course Strings (Pair of strings struck by Risha)
+    // String 1: fundamental + harmonics
+    const oscA = ctx.createOscillator();
+    const oscB = ctx.createOscillator(); // Paired course string
+    const oscOct = ctx.createOscillator(); // 2nd harmonic
+    const oscThird = ctx.createOscillator(); // 3rd harmonic
+
+    oscA.type = 'triangle';
+    oscB.type = 'sawtooth';
+    oscOct.type = 'sine';
+    oscThird.type = 'sine';
+
+    // Microtonal course chorus detuning (1.2 cents)
+    oscA.frequency.setValueAtTime(freq * 0.9993, now);
+    oscB.frequency.setValueAtTime(freq * 1.0007, now);
+    oscOct.frequency.setValueAtTime(freq * 2.001, now);
+    oscThird.frequency.setValueAtTime(freq * 3.002, now);
+
+    const gainA = ctx.createGain();
+    const gainB = ctx.createGain();
+    const gainOct = ctx.createGain();
+    const gainThird = ctx.createGain();
+
+    // Fast acoustic pluck attack and warm woody decay
+    gainA.gain.setValueAtTime(0.0001, now);
+    gainA.gain.linearRampToValueAtTime(0.65, now + 0.004);
+    gainA.gain.exponentialRampToValueAtTime(0.18, now + 0.2);
+    gainA.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    gainB.gain.setValueAtTime(0.0001, now);
+    gainB.gain.linearRampToValueAtTime(0.45, now + 0.006);
+    gainB.gain.exponentialRampToValueAtTime(0.12, now + 0.18);
+    gainB.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    gainOct.gain.setValueAtTime(0.0001, now);
+    gainOct.gain.linearRampToValueAtTime(0.25, now + 0.003);
+    gainOct.gain.exponentialRampToValueAtTime(0.0001, now + Math.min(duration, 0.45));
+
+    gainThird.gain.setValueAtTime(0.0001, now);
+    gainThird.gain.linearRampToValueAtTime(0.12, now + 0.002);
+    gainThird.gain.exponentialRampToValueAtTime(0.0001, now + Math.min(duration, 0.25));
+
+    oscA.connect(gainA);
+    oscB.connect(gainB);
+    oscOct.connect(gainOct);
+    oscThird.connect(gainThird);
+
+    gainA.connect(bowlLow);
+    gainB.connect(bowlLow);
+    gainOct.connect(bowlLow);
+    gainThird.connect(bowlLow);
+
+    bowlLow.connect(bowlMid);
+    bowlMid.connect(bowlHigh);
+    bowlHigh.connect(noteGain);
+
+    noteGain.gain.setValueAtTime(0.9, now);
+    noteGain.gain.setValueAtTime(0.9, now + duration - 0.06);
+    noteGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    noteGain.connect(this.synthGain || ctx.destination);
+
+    oscA.start(now);
+    oscB.start(now);
+    oscOct.start(now);
+    oscThird.start(now);
+
+    const stopTime = now + duration + 0.05;
+    oscA.stop(stopTime);
+    oscB.stop(stopTime);
+    oscOct.stop(stopTime);
+    oscThird.stop(stopTime);
+
+    return duration;
+  }
+
+  /**
+   * Realistic Acoustic Guitar
+   */
+  private synthesizeRealGuitar(ctx: AudioContext, now: number, freq: number, duration: number): number {
+    const noteGain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(3800, now);
+    filter.frequency.exponentialRampToValueAtTime(950, now + duration);
+    filter.Q.setValueAtTime(1.8, now);
+
+    const bodyRes = ctx.createBiquadFilter();
+    bodyRes.type = 'peaking';
+    bodyRes.frequency.setValueAtTime(110, now);
+    bodyRes.Q.setValueAtTime(2.0, now);
+    bodyRes.gain.setValueAtTime(5.0, now);
+
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    osc1.type = 'sawtooth';
+    osc2.type = 'triangle';
+    osc1.frequency.setValueAtTime(freq, now);
+    osc2.frequency.setValueAtTime(freq * 2, now);
+
+    const g1 = ctx.createGain();
+    const g2 = ctx.createGain();
+    g1.gain.setValueAtTime(0.65, now);
+    g1.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    g2.gain.setValueAtTime(0.3, now);
+    g2.gain.exponentialRampToValueAtTime(0.0001, now + duration * 0.6);
+
+    osc1.connect(g1);
+    osc2.connect(g2);
+    g1.connect(bodyRes);
+    g2.connect(bodyRes);
+    bodyRes.connect(filter);
+    filter.connect(noteGain);
+    noteGain.connect(this.synthGain || ctx.destination);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + duration + 0.05);
+    osc2.stop(now + duration + 0.05);
+    return duration;
+  }
+
+  /**
+   * Realistic Vocal Formant Tone (Aah vowel with natural vibrato)
+   */
+  private synthesizeRealVocal(ctx: AudioContext, now: number, freq: number, duration: number): number {
+    const noteGain = ctx.createGain();
+    const f1 = ctx.createBiquadFilter(); // First formant ~750Hz (Aah)
+    f1.type = 'bandpass';
+    f1.frequency.setValueAtTime(750, now);
+    f1.Q.setValueAtTime(4.0, now);
+
+    const f2 = ctx.createBiquadFilter(); // Second formant ~1200Hz
+    f2.type = 'bandpass';
+    f2.frequency.setValueAtTime(1200, now);
+    f2.Q.setValueAtTime(5.0, now);
+
+    const glottal = ctx.createOscillator();
+    glottal.type = 'sawtooth';
+    glottal.frequency.setValueAtTime(freq, now);
+
+    // Natural 5.5Hz vibrato
+    const vibrato = ctx.createOscillator();
+    const vibratoGain = ctx.createGain();
+    vibrato.frequency.setValueAtTime(5.4, now);
+    vibratoGain.gain.setValueAtTime(0.001, now);
+    vibratoGain.gain.linearRampToValueAtTime(freq * 0.015, now + 0.25); // delayed vibrato onset
+    vibrato.connect(vibratoGain);
+    vibratoGain.connect(glottal.frequency);
+    vibrato.start(now);
+    vibrato.stop(now + duration + 0.05);
+
+    const glottalGain = ctx.createGain();
+    glottalGain.gain.setValueAtTime(0.0001, now);
+    glottalGain.gain.linearRampToValueAtTime(0.8, now + 0.05);
+    glottalGain.gain.setValueAtTime(0.7, now + duration - 0.1);
+    glottalGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    glottal.connect(glottalGain);
+    glottalGain.connect(f1);
+    glottalGain.connect(f2);
+    f1.connect(noteGain);
+    f2.connect(noteGain);
+    noteGain.connect(this.synthGain || ctx.destination);
+
+    glottal.start(now);
+    glottal.stop(now + duration + 0.05);
+    return duration;
+  }
+
+  /**
+   * Realistic Bowed Strings / Cello
+   */
+  private synthesizeRealStrings(ctx: AudioContext, now: number, freq: number, duration: number): number {
+    const noteGain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2800, now);
+    filter.Q.setValueAtTime(1.2, now);
 
     const osc1 = ctx.createOscillator();
     const osc2 = ctx.createOscillator();
     const osc3 = ctx.createOscillator();
 
-    const gain1 = ctx.createGain();
-    const gain2 = ctx.createGain();
-    const gain3 = ctx.createGain();
+    osc1.type = 'sawtooth';
+    osc2.type = 'sawtooth';
+    osc3.type = 'triangle';
 
-    let attack = 0.02;
-    let decay = 0.15;
-    let sustain = 0.6;
-    let release = 0.25;
-    let peakVolume = 0.65;
+    osc1.frequency.setValueAtTime(freq, now);
+    osc2.frequency.setValueAtTime(freq * 1.002, now); // detune ensemble
+    osc3.frequency.setValueAtTime(freq * 0.998, now);
 
-    if (type === 'oud') {
-      // Arabic Oud: authentic double-course strings with wooden bowl resonance
-      filter.type = 'peaking';
-      filter.frequency.setValueAtTime(650, now);
-      filter.Q.setValueAtTime(2.2, now);
-      filter.gain.setValueAtTime(6.0, now);
+    const g1 = ctx.createGain();
+    const g2 = ctx.createGain();
+    const g3 = ctx.createGain();
 
-      // Course string 1 & Course string 2 slightly detuned by +0.8 cents
-      osc1.type = 'triangle';
-      osc2.type = 'sawtooth';
-      osc3.type = 'sine';
+    g1.gain.setValueAtTime(0.35, now);
+    g2.gain.setValueAtTime(0.3, now);
+    g3.gain.setValueAtTime(0.35, now);
 
-      osc1.frequency.setValueAtTime(frequency, now);
-      osc2.frequency.setValueAtTime(frequency * 1.0006, now); // subtle string pair chorus
-      osc3.frequency.setValueAtTime(frequency * 2, now); // 2nd harmonic octave
+    osc1.connect(g1);
+    osc2.connect(g2);
+    osc3.connect(g3);
 
-      gain1.gain.setValueAtTime(0.65, now);
-      gain2.gain.setValueAtTime(0.2, now);
-      gain3.gain.setValueAtTime(0.15, now);
+    g1.connect(filter);
+    g2.connect(filter);
+    g3.connect(filter);
 
-      // Fast plucked plectrum (risha) attack
-      attack = 0.008;
-      decay = 0.12;
-      sustain = 0.45;
-      release = 0.35;
-      peakVolume = 0.75;
-    } else if (type === 'guitar') {
-      // Acoustic Guitar: bright plucked transient and resonant decay
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(3600, now);
-      filter.frequency.exponentialRampToValueAtTime(1200, now + durationSeconds);
-      filter.Q.setValueAtTime(1.5, now);
+    filter.connect(noteGain);
+    noteGain.connect(this.synthGain || ctx.destination);
 
-      osc1.type = 'triangle';
-      osc2.type = 'sawtooth';
-      osc3.type = 'sine';
-
-      osc1.frequency.setValueAtTime(frequency, now);
-      osc2.frequency.setValueAtTime(frequency * 2, now);
-      osc3.frequency.setValueAtTime(frequency * 3, now);
-
-      gain1.gain.setValueAtTime(0.7, now);
-      gain2.gain.setValueAtTime(0.25, now);
-      gain3.gain.setValueAtTime(0.08, now);
-
-      attack = 0.01;
-      decay = 0.18;
-      sustain = 0.4;
-      release = 0.3;
-      peakVolume = 0.7;
-    } else if (type === 'vocal') {
-      // Vocal tone: warm formant sine/triangle with subtle vibrato
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(Math.min(frequency * 4, 3200), now);
-      filter.Q.setValueAtTime(1.0, now);
-
-      osc1.type = 'sine';
-      osc2.type = 'triangle';
-      osc3.type = 'sine';
-
-      osc1.frequency.setValueAtTime(frequency, now);
-      osc2.frequency.setValueAtTime(frequency, now);
-      osc3.frequency.setValueAtTime(frequency * 2, now);
-
-      gain1.gain.setValueAtTime(0.75, now);
-      gain2.gain.setValueAtTime(0.2, now);
-      gain3.gain.setValueAtTime(0.05, now);
-
-      // Subtle human vibrato
-      const lfo = ctx.createOscillator();
-      const lfoGain = ctx.createGain();
-      lfo.frequency.setValueAtTime(5.5, now); // 5.5 Hz vibrato rate
-      lfoGain.gain.setValueAtTime(1.8, now); // vibrato depth
-      lfo.connect(lfoGain);
-      lfoGain.connect(osc1.frequency);
-      lfo.start(now + 0.15);
-      lfo.stop(now + durationSeconds + 0.1);
-
-      attack = 0.06;
-      decay = 0.1;
-      sustain = 0.8;
-      release = 0.2;
-      peakVolume = 0.6;
-    } else if (type === 'strings') {
-      // Strings / Cello: smooth bowed attack, rich warm sustained overtones
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(2600, now);
-      filter.Q.setValueAtTime(1.4, now);
-
-      osc1.type = 'sawtooth';
-      osc2.type = 'triangle';
-      osc3.type = 'sawtooth';
-
-      osc1.frequency.setValueAtTime(frequency, now);
-      osc2.frequency.setValueAtTime(frequency * 1.001, now);
-      osc3.frequency.setValueAtTime(frequency * 0.999, now);
-
-      gain1.gain.setValueAtTime(0.4, now);
-      gain2.gain.setValueAtTime(0.4, now);
-      gain3.gain.setValueAtTime(0.2, now);
-
-      attack = 0.12;
-      decay = 0.15;
-      sustain = 0.85;
-      release = 0.4;
-      peakVolume = 0.55;
-    } else {
-      // Classic Grand Piano
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(Math.min(frequency * 5, 4500), now);
-      filter.Q.setValueAtTime(1.2, now);
-
-      osc1.type = 'triangle';
-      osc2.type = 'sine';
-      osc3.type = 'sine';
-
-      osc1.frequency.setValueAtTime(frequency, now);
-      osc2.frequency.setValueAtTime(frequency * 2, now);
-      osc3.frequency.setValueAtTime(frequency * 3, now);
-
-      gain1.gain.setValueAtTime(0.7, now);
-      gain2.gain.setValueAtTime(0.25, now);
-      gain3.gain.setValueAtTime(0.08, now);
-
-      attack = 0.02;
-      decay = 0.15;
-      sustain = 0.6;
-      release = 0.25;
-      peakVolume = 0.65;
-    }
-
-    osc1.connect(gain1);
-    osc2.connect(gain2);
-    osc3.connect(gain3);
-
-    gain1.connect(filter);
-    gain2.connect(filter);
-    gain3.connect(filter);
-
-    filter.connect(masterNoteGain);
-    masterNoteGain.connect(this.synthGain || ctx.destination);
-
-    // Natural ADSR Envelope
-    masterNoteGain.gain.linearRampToValueAtTime(peakVolume, now + attack);
-    masterNoteGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, sustain * peakVolume), now + attack + decay);
-
-    const sustainEndTime = now + Math.max(0.1, durationSeconds - release);
-    masterNoteGain.gain.setValueAtTime(Math.max(0.0001, sustain * peakVolume), sustainEndTime);
-    masterNoteGain.gain.exponentialRampToValueAtTime(0.0001, now + durationSeconds);
+    // Bowed attack
+    noteGain.gain.setValueAtTime(0.0001, now);
+    noteGain.gain.linearRampToValueAtTime(0.7, now + 0.12);
+    noteGain.gain.setValueAtTime(0.7, now + duration - 0.15);
+    noteGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
     osc1.start(now);
     osc2.start(now);
     osc3.start(now);
 
-    osc1.stop(now + durationSeconds + 0.1);
-    osc2.stop(now + durationSeconds + 0.1);
-    osc3.stop(now + durationSeconds + 0.1);
+    osc1.stop(now + duration + 0.05);
+    osc2.stop(now + duration + 0.05);
+    osc3.stop(now + duration + 0.05);
+    return duration;
+  }
 
-    return durationSeconds;
+  /**
+   * Key Recording & Playback Methods
+   */
+  public startRecording() {
+    this.isRecordingActive = true;
+    this.recordedNotesList = [];
+    this.recordingStartTime = Date.now();
+    this.notifyRecordingListeners();
+  }
+
+  public stopRecording(): RecordedNote[] {
+    this.isRecordingActive = false;
+    this.notifyRecordingListeners();
+    return [...this.recordedNotesList];
+  }
+
+  public isRecording(): boolean {
+    return this.isRecordingActive;
+  }
+
+  public isPlaying(): boolean {
+    return this.isPlaybackActive;
+  }
+
+  public getRecordedNotes(): RecordedNote[] {
+    return [...this.recordedNotesList];
+  }
+
+  public clearRecording() {
+    this.stopPlayback();
+    this.recordedNotesList = [];
+    this.notifyRecordingListeners();
+  }
+
+  public playRecording(onNotePlay?: (midi: number) => void, onComplete?: () => void) {
+    if (this.recordedNotesList.length === 0) return;
+    this.stopPlayback();
+    this.isPlaybackActive = true;
+    this.notifyRecordingListeners();
+
+    let maxTime = 0;
+    this.recordedNotesList.forEach((n) => {
+      const timeout = window.setTimeout(() => {
+        this.playTone(n.frequency, Math.max(0.4, n.duration / 1000));
+        if (onNotePlay) onNotePlay(n.midi);
+      }, n.startTime);
+      this.playbackTimeouts.push(timeout);
+
+      const endTime = n.startTime + n.duration;
+      if (endTime > maxTime) maxTime = endTime;
+    });
+
+    const finishTimeout = window.setTimeout(() => {
+      this.isPlaybackActive = false;
+      this.notifyRecordingListeners();
+      if (onComplete) onComplete();
+    }, maxTime + 300);
+
+    this.playbackTimeouts.push(finishTimeout);
+  }
+
+  public stopPlayback() {
+    this.playbackTimeouts.forEach((t) => clearTimeout(t));
+    this.playbackTimeouts = [];
+    this.isPlaybackActive = false;
+    this.notifyRecordingListeners();
+  }
+
+  public subscribeRecording(cb: RecordingStateCallback): () => void {
+    this.recordingListeners.add(cb);
+    return () => {
+      this.recordingListeners.delete(cb);
+    };
+  }
+
+  private notifyRecordingListeners() {
+    this.recordingListeners.forEach((cb) =>
+      cb(this.isRecordingActive, this.isPlaybackActive, this.recordedNotesList.length)
+    );
   }
 
   /**

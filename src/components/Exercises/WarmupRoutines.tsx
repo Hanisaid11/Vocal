@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { Play, Sparkles, Activity, Music, Flame, Zap, CheckCircle2, ChevronRight, Info } from 'lucide-react';
-import { WarmupExercise, VocalRangeProfile, PitchDetectionResult, PracticeSessionRecord } from '../../types/vocal';
+import { WarmupExercise, VocalRangeProfile, PitchDetectionResult, PracticeSessionRecord, AppLanguage, NotationSystem } from '../../types/vocal';
+import { formatNoteName } from '../../utils/noteUtils';
+import { translations } from '../../utils/i18n';
 import { ExercisePlayer } from './ExercisePlayer';
 
 interface WarmupRoutinesProps {
   profile: VocalRangeProfile;
   currentPitch: PitchDetectionResult | null;
+  language?: AppLanguage;
+  notation?: NotationSystem;
   onSessionComplete: (session: PracticeSessionRecord) => void;
 }
 
@@ -93,9 +97,12 @@ export const PRESET_WARMUPS: WarmupExercise[] = [
 export const WarmupRoutines: React.FC<WarmupRoutinesProps> = ({
   profile,
   currentPitch,
+  language = 'en',
+  notation = 'english',
   onSessionComplete,
 }) => {
   const [selectedExercise, setSelectedExercise] = useState<WarmupExercise | null>(null);
+  const t = translations[language];
 
   if (selectedExercise) {
     return (
@@ -103,6 +110,8 @@ export const WarmupRoutines: React.FC<WarmupRoutinesProps> = ({
         exercise={selectedExercise}
         profile={profile}
         currentPitch={currentPitch}
+        language={language}
+        notation={notation}
         onFinishSession={(session) => {
           onSessionComplete(session);
           setSelectedExercise(null);
@@ -121,9 +130,9 @@ export const WarmupRoutines: React.FC<WarmupRoutinesProps> = ({
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white">Adaptive Warm-ups & Vocalises</h2>
+            <h2 className="text-base font-bold text-white">{t.warmupTitle}</h2>
             <p className="text-xs text-slate-300">
-              Auto-calibrated for your <span className="font-semibold text-cyan-300">{profile.voiceType}</span> range ({profile.lowestNote.fullName} – {profile.highestNote.fullName})
+              {t.warmupDesc} • <span className="font-semibold text-cyan-300">{profile.voiceType}</span> ({formatNoteName(profile.lowestNote, notation)} – {formatNoteName(profile.highestNote, notation)})
             </p>
           </div>
         </div>

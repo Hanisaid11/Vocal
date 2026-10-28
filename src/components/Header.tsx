@@ -106,7 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* PWA Install Button */}
-          <PWAInstallButton />
+          <PWAInstallButton language={language} />
 
           {/* Cloud Sync Button */}
           <button

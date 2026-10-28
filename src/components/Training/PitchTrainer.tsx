@@ -1,23 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Volume2, Sparkles, Trophy, RotateCcw, Target, Radio, Play, Pause, Flame } from 'lucide-react';
-import { NoteInfo, PitchDetectionResult, VocalRangeProfile, PracticeSessionRecord } from '../../types/vocal';
-import { midiToNoteInfo, frequencyToNote, generateNotesRange } from '../../utils/noteUtils';
+import { Volume2, RotateCcw, Target, Flame } from 'lucide-react';
+import { NoteInfo, PitchDetectionResult, VocalRangeProfile, PracticeSessionRecord, AppLanguage, NotationSystem } from '../../types/vocal';
+import { midiToNoteInfo, generateNotesRange, formatNoteName } from '../../utils/noteUtils';
 import { audioEngine } from '../../audio/audioEngine';
 import { haptics } from '../../utils/haptics';
+import { translations } from '../../utils/i18n';
 
 interface PitchTrainerProps {
   profile: VocalRangeProfile;
   currentPitch: PitchDetectionResult | null;
+  language?: AppLanguage;
+  notation?: NotationSystem;
   onRecordSession: (session: PracticeSessionRecord) => void;
 }
 
 export const PitchTrainer: React.FC<PitchTrainerProps> = ({
   profile,
   currentPitch,
+  language = 'ar',
+  notation = 'arabic',
   onRecordSession,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pitchHistoryRef = useRef<Array<{ freq: number | null; cents: number; isInTune: boolean }>>([]);
+
+  const isAr = language === 'ar';
+  const t = translations[language] || translations.en;
 
   // Training mode: 'free_tuner' | 'target_match'
   const [mode, setMode] = useState<'free_tuner' | 'target_match'>('target_match');
@@ -98,91 +106,70 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
 
       const width = canvas.width;
       const height = canvas.height;
+      const midY = height / 2;
 
-      // Dark background
-      ctx.fillStyle = '#090d16';
+      // Clear background
+      ctx.fillStyle = '#020617';
       ctx.fillRect(0, 0, width, height);
 
-      // Draw Grid Lines (Semis & Octaves)
-      ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
-      ctx.lineWidth = 1;
-      for (let y = 20; y < height; y += 30) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
-        ctx.stroke();
-      }
+      // Target zone horizontal band
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.08)';
+      ctx.fillRect(0, midY - 14, width, 28);
 
-      // Draw Target Note Line
-      const targetCenterY = height / 2;
-      ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
-      ctx.fillRect(0, targetCenterY - 14, width, 28);
-
-      ctx.strokeStyle = '#6366f1';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 6]);
+      // Center reference zero-line
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
       ctx.beginPath();
-      ctx.moveTo(0, targetCenterY);
-      ctx.lineTo(width, targetCenterY);
+      ctx.moveTo(0, midY);
+      ctx.lineTo(width, midY);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Draw User Pitch Ribbon Trajectory
+      // Draw pitch trail
       const history = pitchHistoryRef.current;
       const stepX = width / 150;
+
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
       for (let i = 1; i < history.length; i++) {
         const prev = history[i - 1];
         const curr = history[i];
 
-        if (curr.freq && prev.freq) {
-          // Calculate Y relative to target note
-          // 1 semitone is approximately 25px
-          const prevCentsDiff = (prev.cents || 0);
-          const currCentsDiff = (curr.cents || 0);
+        if (prev.freq === null || curr.freq === null) continue;
 
-          const prevY = targetCenterY - (prevCentsDiff * 0.7);
-          const currY = targetCenterY - (currCentsDiff * 0.7);
+        const x1 = (i - 1) * stepX;
+        const x2 = i * stepX;
 
-          const x1 = (i - 1) * stepX;
-          const x2 = i * stepX;
+        // Cents mapped from -50 to +50
+        const y1 = midY - (prev.cents / 50) * (height / 2.4);
+        const y2 = midY - (curr.cents / 50) * (height / 2.4);
 
-          ctx.beginPath();
-          ctx.moveTo(x1, Math.max(10, Math.min(height - 10, prevY)));
-          ctx.lineTo(x2, Math.max(10, Math.min(height - 10, currY)));
-
-          // Color by accuracy
-          if (Math.abs(curr.cents) <= 12) {
-            ctx.strokeStyle = '#34d399'; // Emerald
-            ctx.shadowColor = '#34d399';
-            ctx.shadowBlur = 8;
-          } else if (Math.abs(curr.cents) <= 25) {
-            ctx.strokeStyle = '#fbbf24'; // Amber
-            ctx.shadowBlur = 0;
-          } else {
-            ctx.strokeStyle = '#f43f5e'; // Rose
-            ctx.shadowBlur = 0;
-          }
-
-          ctx.lineWidth = 3.5;
-          ctx.stroke();
-        }
+        ctx.strokeStyle = curr.isInTune ? '#10b981' : '#f59e0b';
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
       }
 
-      ctx.shadowBlur = 0;
+      // Live head orb
+      if (history.length > 0) {
+        const last = history[history.length - 1];
+        if (last.freq !== null) {
+          const x = (history.length - 1) * stepX;
+          const y = midY - (last.cents / 50) * (height / 2.4);
 
-      // Draw Target Ball at current lead edge
-      if (currentPitch?.note) {
-        const leadX = width - 20;
-        const leadY = targetCenterY - (currentPitch.cents * 0.7);
+          ctx.fillStyle = last.isInTune ? '#34d399' : '#fbbf24';
+          ctx.beginPath();
+          ctx.arc(x, y, 6, 0, Math.PI * 2);
+          ctx.fill();
 
-        ctx.beginPath();
-        ctx.arc(leadX, Math.max(12, Math.min(height - 12, leadY)), 8, 0, Math.PI * 2);
-        ctx.fillStyle = currentPitch.isInTune ? '#10b981' : '#f59e0b';
-        ctx.shadowColor = currentPitch.isInTune ? '#10b981' : '#f59e0b';
-        ctx.shadowBlur = 12;
-        ctx.fill();
-        ctx.shadowBlur = 0;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
       }
 
       animId = requestAnimationFrame(renderRibbon);
@@ -190,13 +177,14 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
 
     animId = requestAnimationFrame(renderRibbon);
     return () => cancelAnimationFrame(animId);
-  }, [currentPitch, targetMidi]);
+  }, [currentPitch]);
 
-  const playReferenceTone = async () => {
-    haptics.tap();
+  const playReferenceTone = () => {
     setIsPlayingReference(true);
-    await audioEngine.playTone(targetNote.frequency, 1.5, 'piano');
-    setIsPlayingReference(false);
+    audioEngine.playTone(targetNote.frequency, 1.2);
+    setTimeout(() => {
+      setIsPlayingReference(false);
+    }, 1200);
   };
 
   const nextRandomNote = () => {
@@ -204,26 +192,6 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
     const nextIdx = Math.floor(Math.random() * availableNotes.length);
     setTargetMidi(availableNotes[nextIdx].midi);
     setHoldProgress(0);
-  };
-
-  const endSession = () => {
-    const durationSeconds = Math.max(10, Math.round((Date.now() - sessionStartTime.current) / 1000));
-    const attempted = Math.max(1, totalAttempts + 1);
-    const accuracy = Math.round((notesCompleted / attempted) * 100);
-
-    const record: PracticeSessionRecord = {
-      id: `pitch-train-${Date.now()}`,
-      timestamp: Date.now(),
-      exerciseTitle: 'Real-time Pitch Matching',
-      durationSeconds,
-      notesAttempted: attempted,
-      notesHitInTune: notesCompleted,
-      accuracyPercentage: Math.min(100, accuracy),
-      averageCentsError: 7,
-      dateString: 'Just now',
-    };
-
-    onRecordSession(record);
   };
 
   return (
@@ -235,8 +203,12 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
             <Target className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white">Interactive Pitch Engine</h2>
-            <p className="text-xs text-slate-400">Real-time YIN pitch detection & precision tuner</p>
+            <h2 className="text-base font-bold text-white">
+              {isAr ? 'محرك ضبط وتدريب النغمة التفاعلي' : 'Interactive Pitch Engine'}
+            </h2>
+            <p className="text-xs text-slate-400">
+              {isAr ? 'كشف النغمات اللحظي بالخوارزمية وضابط النغمات الدقيق' : 'Real-time YIN pitch detection & precision tuner'}
+            </p>
           </div>
         </div>
 
@@ -248,7 +220,7 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
               mode === 'target_match' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Target Match
+            {isAr ? 'مطابقة الهدف' : 'Target Match'}
           </button>
           <button
             onClick={() => setMode('free_tuner')}
@@ -256,7 +228,7 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
               mode === 'free_tuner' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Chromatic Tuner
+            {isAr ? 'ضابط النغمات' : 'Chromatic Tuner'}
           </button>
         </div>
       </div>
@@ -274,10 +246,16 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
               <Volume2 className={`w-5 h-5 ${isPlayingReference ? 'animate-pulse' : ''}`} />
             </button>
             <div>
-              <div className="text-[10px] uppercase font-bold text-indigo-400">Target Note</div>
+              <div className="text-[10px] uppercase font-bold text-indigo-400">
+                {isAr ? 'النغمة المستهدفة' : 'Target Note'}
+              </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-white font-mono">{targetNote.fullName}</span>
-                <span className="text-xs text-slate-400 font-mono">({Math.round(targetNote.frequency)} Hz)</span>
+                <span className="text-2xl font-black text-white font-mono">
+                  {formatNoteName(targetNote, notation)}
+                </span>
+                <span className="text-xs text-slate-400 font-mono">
+                  ({Math.round(targetNote.frequency)} {t.hzUnit})
+                </span>
               </div>
             </div>
           </div>
@@ -294,13 +272,13 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
             >
               {availableNotes.map((n) => (
                 <option key={n.midi} value={n.midi}>
-                  {n.fullName} ({Math.round(n.frequency)}Hz)
+                  {formatNoteName(n, notation)} ({Math.round(n.frequency)} {t.hzUnit})
                 </option>
               ))}
             </select>
             <button
               onClick={nextRandomNote}
-              title="Next Random Note"
+              title={isAr ? 'النغمة التالية العشوائية' : 'Next Random Note'}
               className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition"
             >
               <RotateCcw className="w-4 h-4" />
@@ -322,7 +300,9 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
         <div className="absolute top-2 left-3 bg-slate-900/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 flex items-center gap-2 text-xs">
           <div className={`w-2 h-2 rounded-full ${currentPitch?.note ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`} />
           <span className="font-mono text-slate-300">
-            {currentPitch?.note ? `${currentPitch.note.fullName} (${currentPitch.frequency} Hz)` : 'Sing to track pitch'}
+            {currentPitch?.note
+              ? `${formatNoteName(currentPitch.note, notation)} (${currentPitch.frequency} ${t.hzUnit})`
+              : (isAr ? 'غنِّ لتتبع نغمتك بدقة' : 'Sing to track pitch')}
           </span>
         </div>
 
@@ -335,7 +315,7 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
                 : 'bg-amber-950/80 text-amber-300 border-amber-500/50'
             }`}
           >
-            {currentPitch.cents > 0 ? `+${currentPitch.cents}` : currentPitch.cents} cents
+            {currentPitch.cents > 0 ? `+${currentPitch.cents}` : currentPitch.cents} {isAr ? 'سنت' : 'cents'}
           </div>
         )}
       </div>
@@ -344,10 +324,12 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
       {mode === 'target_match' && (
         <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800 space-y-2">
           <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-400">Match & Sustain Target Pitch:</span>
+            <span className="text-slate-400">
+              {isAr ? 'طابق واثبت على النغمة المستهدفة:' : 'Match & Sustain Target Pitch:'}
+            </span>
             <div className="flex items-center gap-1.5 font-bold text-amber-400">
               <Flame className="w-3.5 h-3.5" />
-              <span>Streak: {scoreStreak}</span>
+              <span>{isAr ? 'التتابع' : 'Streak'}: {scoreStreak}</span>
             </div>
           </div>
           <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
@@ -363,7 +345,7 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
       <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col items-center">
         {/* Note display */}
         <div className="text-4xl font-black text-white font-mono-numbers">
-          {currentPitch?.note ? currentPitch.note.fullName : '—'}
+          {currentPitch?.note ? formatNoteName(currentPitch.note, notation) : '—'}
         </div>
 
         {/* Cents meter bar */}
@@ -389,9 +371,9 @@ export const PitchTrainer: React.FC<PitchTrainerProps> = ({
           </div>
 
           <div className="flex justify-between text-[10px] text-slate-500 font-mono mt-1 px-1">
-            <span>-50¢ (Flat)</span>
-            <span className="text-emerald-400 font-bold">0¢ In-Tune</span>
-            <span>+50¢ (Sharp)</span>
+            <span>{isAr ? '-50 سنت (هابط ♭)' : '-50¢ (Flat)'}</span>
+            <span className="text-emerald-400 font-bold">{isAr ? '0 نغمة صحيحة' : '0¢ In-Tune'}</span>
+            <span>{isAr ? '+50 سنت (حاد ♯)' : '+50¢ (Sharp)'}</span>
           </div>
         </div>
       </div>

@@ -1,9 +1,10 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { Volume2, ZoomIn, ZoomOut, Target, Sliders, Music, Mic, ChevronLeft, ChevronRight } from 'lucide-react';
-import { NoteInfo, VocalRangeProfile, PitchDetectionResult, AppLanguage, NotationSystem } from '../../types/vocal';
-import { midiToNoteInfo, NOTE_NAMES, formatNoteName } from '../../utils/noteUtils';
+import { Volume2, Circle, Play, Square, ChevronLeft, ChevronRight, Mic, Sparkles, Target } from 'lucide-react';
+import { NoteInfo, VocalRangeProfile, PitchDetectionResult, AppLanguage, NotationSystem, AppTheme } from '../../types/vocal';
+import { midiToNoteInfo, formatNoteName } from '../../utils/noteUtils';
 import { audioEngine } from '../../audio/audioEngine';
 import { translations } from '../../utils/i18n';
+import { THEMES } from '../../utils/theme';
 import { haptics } from '../../utils/haptics';
 
 interface HorizontalPianoProps {
@@ -11,6 +12,7 @@ interface HorizontalPianoProps {
   currentPitch: PitchDetectionResult | null;
   language?: AppLanguage;
   notation?: NotationSystem;
+  theme?: AppTheme;
   onSelectRangeProfile?: (profile: VocalRangeProfile) => void;
 }
 
@@ -19,50 +21,96 @@ export const HorizontalPiano: React.FC<HorizontalPianoProps> = ({
   currentPitch,
   language = 'en',
   notation = 'english',
+  theme = 'classic-piano',
 }) => {
   const t = translations[language];
+  const themeConfig = THEMES[theme] || THEMES['classic-piano'];
+
   const containerRef = useRef<HTMLDivElement>(null);
-  const [keyWidth, setKeyWidth] = useState<number>(44);
+  const minimapRef = useRef<HTMLDivElement>(null);
+
+  const [keyWidth, setKeyWidth] = useState<number>(48);
   const [activeMidiNotes, setActiveMidiNotes] = useState<Set<number>>(new Set());
-  const [octaveSpan] = useState<{ startMidi: number; endMidi: number }>({
-    startMidi: 24, // C1
-    endMidi: 96,   // C7
-  });
-  const [viewFilter, setViewFilter] = useState<'all' | 'rangeOnly'>('all');
-  const [showLabels, setShowLabels] = useState(true);
+  const [scrollProgress, setScrollProgress] = useState<number>(0.35); // 0 to 1 for minimap viewport indicator
+  const [visibleRatio, setVisibleRatio] = useState<number>(0.2); // ratio of total keyboard visible
 
-  const allMidiNotes = useMemo(() => {
+  // Recording & Playback state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPlayingRecording, setIsPlayingRecording] = useState(false);
+  const [recordedCount, setRecordedCount] = useState(0);
+
+  // Full 88-Key Standard Piano Compass: A0 (21) to C8 (108)
+  const full88Keys = useMemo(() => {
     const list: NoteInfo[] = [];
-    const min = viewFilter === 'rangeOnly' ? Math.max(24, profile.lowestNote.midi - 2) : octaveSpan.startMidi;
-    const max = viewFilter === 'rangeOnly' ? Math.min(108, profile.highestNote.midi + 2) : octaveSpan.endMidi;
-
-    for (let midi = min; midi <= max; midi++) {
-      list.push(midiToNoteInfo(midi));
+    for (let m = 21; m <= 108; m++) {
+      list.push(midiToNoteInfo(m));
     }
     return list;
-  }, [octaveSpan, viewFilter, profile]);
+  }, []);
 
   const whiteKeys = useMemo(() => {
-    return allMidiNotes.filter((note) => !note.name.includes('#'));
-  }, [allMidiNotes]);
+    return full88Keys.filter((note) => !note.name.includes('#'));
+  }, [full88Keys]);
 
+  // Subscribe to audio engine recording events
+  useEffect(() => {
+    const unsub = audioEngine.subscribeRecording((rec, play, count) => {
+      setIsRecording(rec);
+      setIsPlayingRecording(play);
+      setRecordedCount(count);
+    });
+    return unsub;
+  }, []);
+
+  // Center keyboard on middle register on load
   useEffect(() => {
     if (containerRef.current) {
-      const middleMidi = profile.middleRegisterNote?.midi || 60;
+      const middleMidi = profile.middleRegisterNote?.midi || 60; // C4
       const whiteKeyIndex = whiteKeys.findIndex((k) => k.midi >= middleMidi);
       if (whiteKeyIndex !== -1) {
         const scrollTarget = Math.max(0, whiteKeyIndex * keyWidth - containerRef.current.clientWidth / 2 + keyWidth);
         containerRef.current.scrollLeft = scrollTarget;
+        updateScrollMetrics();
       }
     }
-  }, [viewFilter]);
+  }, [keyWidth]);
 
+  // Track scroll metrics for the mini 88-key scrubber overview
+  const updateScrollMetrics = () => {
+    if (!containerRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = containerRef.current;
+    const maxScroll = Math.max(1, scrollWidth - clientWidth);
+    const progress = Math.max(0, Math.min(1, scrollLeft / maxScroll));
+    setScrollProgress(progress);
+    setVisibleRatio(Math.min(1, clientWidth / scrollWidth));
+  };
+
+  const scrollByDelta = (semitones: number) => {
+    haptics.tap();
+    if (!containerRef.current) return;
+    const targetScroll = containerRef.current.scrollLeft + (semitones * keyWidth);
+    containerRef.current.scrollTo({ left: targetScroll, behavior: 'smooth' });
+  };
+
+  // Click on minimap scrubber to jump
+  const handleMinimapClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!minimapRef.current || !containerRef.current) return;
+    const rect = minimapRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+
+    const maxScroll = containerRef.current.scrollWidth - containerRef.current.clientWidth;
+    containerRef.current.scrollTo({ left: ratio * maxScroll, behavior: 'smooth' });
+  };
+
+  // Play a note
   const handlePlayNote = async (midi: number) => {
     haptics.tap();
     const note = midiToNoteInfo(midi);
     setActiveMidiNotes((prev) => new Set(prev).add(midi));
+
     try {
-      await audioEngine.playTone(note.frequency, 0.9, 'piano');
+      await audioEngine.playTone(note.frequency, 1.4, undefined, midi);
     } finally {
       setTimeout(() => {
         setActiveMidiNotes((prev) => {
@@ -74,13 +122,30 @@ export const HorizontalPiano: React.FC<HorizontalPianoProps> = ({
     }
   };
 
-  const scrollToMidi = (midi: number) => {
-    if (containerRef.current) {
-      const whiteKeyIndex = whiteKeys.findIndex((k) => k.midi >= midi);
-      if (whiteKeyIndex !== -1) {
-        const target = Math.max(0, whiteKeyIndex * keyWidth - containerRef.current.clientWidth / 2 + keyWidth);
-        containerRef.current.scrollTo({ left: target, behavior: 'smooth' });
-      }
+  const handleToggleRecord = () => {
+    haptics.tap();
+    if (isRecording) {
+      audioEngine.stopRecording();
+    } else {
+      audioEngine.startRecording();
+    }
+  };
+
+  const handleTogglePlay = () => {
+    haptics.tap();
+    if (isPlayingRecording) {
+      audioEngine.stopPlayback();
+    } else {
+      audioEngine.playRecording((midi) => {
+        setActiveMidiNotes((prev) => new Set(prev).add(midi));
+        setTimeout(() => {
+          setActiveMidiNotes((prev) => {
+            const next = new Set(prev);
+            next.delete(midi);
+            return next;
+          });
+        }, 250);
+      });
     }
   };
 
@@ -93,125 +158,140 @@ export const HorizontalPiano: React.FC<HorizontalPianoProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950/80 rounded-2xl border border-slate-800/80 overflow-hidden shadow-2xl">
-      <div className="p-3 bg-slate-900/90 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-            <Music className="w-4 h-4" />
+    <div className="flex flex-col bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl overflow-hidden select-none">
+      {/* 
+        TOP CONTROL BAR: EXACT "REAL PIANO" PHOTO LAYOUT
+        [<] [Record Keys + LED] [Play Button] [--- 88-Key Mini Scrubber ---] [Key Size - +] [>]
+      */}
+      <div className={`p-2.5 ${themeConfig.topBarBg} border-b ${themeConfig.topBarBorder} flex items-center justify-between gap-1.5 sm:gap-3 text-xs`}>
+        {/* Left Arrow Scroll */}
+        <button
+          onClick={() => scrollByDelta(-7)}
+          aria-label="Scroll Piano Left"
+          className="w-8 h-8 rounded-full bg-gradient-to-b from-slate-700 to-slate-900 border border-slate-600 text-slate-100 flex items-center justify-center hover:scale-105 active:scale-95 transition shadow"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        {/* Record Keys Button with glowing red LED */}
+        <button
+          onClick={handleToggleRecord}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition shadow text-xs font-bold ${
+            isRecording
+              ? 'bg-rose-950 border-rose-500 text-rose-300 ring-2 ring-rose-500/40 animate-pulse'
+              : 'bg-gradient-to-b from-slate-800 to-slate-950 border-slate-700 text-slate-200 hover:text-white'
+          }`}
+          title={isRecording ? t.stopRecording : t.recordKeys}
+        >
+          <div className="relative flex items-center justify-center">
+            <div className={`w-3.5 h-3.5 rounded-full ${isRecording ? 'bg-red-500 shadow-[0_0_10px_#ef4444]' : 'bg-red-800'}`} />
+            {isRecording && <div className="absolute w-3.5 h-3.5 rounded-full bg-red-400 animate-ping" />}
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-100">{profile.voiceType}</span>
-              <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono text-[10px] border border-indigo-500/30">
-                {formatNoteName(profile.lowestNote, notation)} – {formatNoteName(profile.highestNote, notation)}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400">
-              {profile.octavesSpan} {language === 'ar' ? 'أوكتاف' : 'octaves'} ({profile.totalSemitones} {language === 'ar' ? 'نصف بُعد' : 'semitones'})
-            </p>
+          <span className="hidden sm:inline">{isRecording ? t.recording : t.recordKeys}</span>
+          {recordedCount > 0 && (
+            <span className="font-mono text-[10px] text-amber-300">({recordedCount})</span>
+          )}
+        </button>
+
+        {/* Play Button */}
+        <button
+          onClick={handleTogglePlay}
+          disabled={recordedCount === 0 && !isPlayingRecording}
+          className={`w-8 h-8 rounded-full border flex items-center justify-center transition shadow ${
+            isPlayingRecording
+              ? 'bg-amber-500 border-amber-400 text-slate-950 scale-105'
+              : recordedCount > 0
+              ? 'bg-gradient-to-b from-slate-700 to-slate-900 border-slate-600 text-slate-100 hover:text-amber-400 hover:scale-105'
+              : 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed'
+          }`}
+          title={isPlayingRecording ? 'Stop' : t.playRecording}
+        >
+          {isPlayingRecording ? (
+            <Square className="w-3.5 h-3.5 fill-current" />
+          ) : (
+            <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+          )}
+        </button>
+
+        {/* 88-Key Minimap Overview Strip (Exact as screenshot) */}
+        <div
+          ref={minimapRef}
+          onClick={handleMinimapClick}
+          className="flex-1 h-7 bg-slate-900 border border-slate-700/80 rounded-md relative cursor-pointer overflow-hidden flex items-stretch shadow-inner"
+          title="Full 88-key overview (click to jump)"
+        >
+          {/* Miniature White & Black Keys Grid */}
+          <div className="w-full h-full flex pointer-events-none relative">
+            {whiteKeys.map((k) => (
+              <div key={`mini-w-${k.midi}`} className="flex-1 border-r border-slate-800/60 bg-slate-200" />
+            ))}
+
+            {/* Miniature Black Keys Overlay */}
+            {full88Keys
+              .filter((k) => k.name.includes('#'))
+              .map((bk) => {
+                const whiteIndex = whiteKeys.findIndex((wk) => wk.midi > bk.midi);
+                const pct = (whiteIndex / whiteKeys.length) * 100;
+                return (
+                  <div
+                    key={`mini-b-${bk.midi}`}
+                    style={{ left: `${pct}%` }}
+                    className="absolute top-0 h-4 w-[1.5%] bg-slate-950 rounded-b-xs -translate-x-1/2 z-10"
+                  />
+                );
+              })}
           </div>
+
+          {/* Shaded Viewport Box (Sliding window representing visible keys) */}
+          <div
+            style={{
+              left: `${scrollProgress * (100 - visibleRatio * 100)}%`,
+              width: `${visibleRatio * 100}%`,
+            }}
+            className="absolute top-0 bottom-0 bg-slate-900/75 border-x-2 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)] z-20 transition-all duration-75 pointer-events-none"
+          />
         </div>
 
-        <div className="flex items-center gap-1.5 ml-auto">
-          <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
-            <button
-              onClick={() => setKeyWidth((w) => Math.max(34, w - 6))}
-              aria-label="Zoom Out Piano"
-              className="p-1 hover:text-white text-slate-400 rounded transition"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="px-1 text-[10px] font-mono text-slate-400">{keyWidth}px</span>
-            <button
-              onClick={() => setKeyWidth((w) => Math.min(64, w + 6))}
-              aria-label="Zoom In Piano"
-              className="p-1 hover:text-white text-slate-400 rounded transition"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
+        {/* Key Size (-) and (+) Metallic Buttons */}
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-slate-300 font-bold hidden md:inline">{t.keySize}</span>
           <button
-            onClick={() => setViewFilter((f) => (f === 'all' ? 'rangeOnly' : 'all'))}
-            className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 font-medium transition ${
-              viewFilter === 'rangeOnly'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
-            }`}
+            onClick={() => setKeyWidth((w) => Math.max(32, w - 4))}
+            aria-label="Decrease key size"
+            className="w-7 h-7 rounded-full bg-gradient-to-b from-slate-600 via-slate-700 to-slate-900 border border-slate-500 text-slate-100 flex items-center justify-center font-bold text-sm shadow hover:scale-105 active:scale-95 transition"
           >
-            <Target className="w-3 h-3" />
-            <span>{viewFilter === 'rangeOnly' ? t.myRange : t.fullRange}</span>
+            –
           </button>
-
           <button
-            onClick={() => setShowLabels((l) => !l)}
-            className={`px-2 py-1.5 rounded-lg text-slate-300 hover:text-white transition ${
-              showLabels ? 'bg-slate-800 border border-slate-700 text-indigo-300' : 'bg-slate-900 text-slate-500'
-            }`}
+            onClick={() => setKeyWidth((w) => Math.min(68, w + 4))}
+            aria-label="Increase key size"
+            className="w-7 h-7 rounded-full bg-gradient-to-b from-slate-600 via-slate-700 to-slate-900 border border-slate-500 text-slate-100 flex items-center justify-center font-bold text-sm shadow hover:scale-105 active:scale-95 transition"
           >
-            {t.labels}
+            +
           </button>
         </div>
+
+        {/* Right Arrow Scroll */}
+        <button
+          onClick={() => scrollByDelta(7)}
+          aria-label="Scroll Piano Right"
+          className="w-8 h-8 rounded-full bg-gradient-to-b from-slate-700 to-slate-900 border border-slate-600 text-slate-100 flex items-center justify-center hover:scale-105 active:scale-95 transition shadow"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Live Sung Pitch Bar & Range Markers */}
-      <div className="px-3 py-2 bg-slate-900/60 border-b border-slate-800/50 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 text-slate-400 text-[11px]">
-            <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500/40 border border-indigo-400 inline-block"></span>
-            <span>{t.activeRange}</span>
-          </div>
-          <div className="flex items-center gap-1 text-slate-400 text-[11px]">
-            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400 inline-block shadow-sm shadow-emerald-400"></span>
-            <span>{language === 'ar' ? 'صوتك المباشر' : 'Live Sung Pitch'}</span>
-          </div>
-        </div>
-
-        {currentPitch?.note ? (
-          <div className="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 px-2 py-0.5 rounded-md font-mono text-[11px] animate-pulse">
-            <Mic className="w-3 h-3 text-emerald-400" />
-            <span className="font-bold">{formatNoteName(currentPitch.note, notation)}</span>
-            <span>({Math.round(currentPitch.frequency || 0)} Hz)</span>
-            <span className={currentPitch.isInTune ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-              {currentPitch.cents > 0 ? `+${currentPitch.cents}` : currentPitch.cents}¢
-            </span>
-          </div>
-        ) : (
-          <span className="text-[11px] text-slate-500 italic">{t.singPrompt}</span>
-        )}
-      </div>
-
-      {/* Octave Quick Jump Bar */}
-      <div className="px-2 py-1.5 bg-slate-900/40 border-b border-slate-800/40 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-        <span className="text-[10px] uppercase font-bold text-slate-500 px-1 shrink-0">Octaves:</span>
-        {[1, 2, 3, 4, 5, 6].map((oct) => {
-          const cMidi = (oct + 1) * 12;
-          const isMid = profile.middleRegisterNote?.octave === oct;
-          return (
-            <button
-              key={oct}
-              onClick={() => scrollToMidi(cMidi)}
-              className={`px-2.5 py-0.5 rounded text-[11px] font-mono shrink-0 transition ${
-                isMid
-                  ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/50 font-bold'
-                  : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700'
-              }`}
-            >
-              C{oct}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Piano Keys Canvas / Touch Area */}
+      {/* Main Piano Keyboard Area */}
       <div
         ref={containerRef}
-        className="relative flex-1 overflow-x-auto overflow-y-hidden select-none bg-slate-950 py-4 px-2 min-h-[220px]"
+        onScroll={updateScrollMetrics}
+        className="relative overflow-x-auto overflow-y-hidden select-none bg-slate-950 py-1 px-1 min-h-[220px]"
       >
         <div
           className="relative inline-flex items-start h-[190px]"
           style={{ width: `${whiteKeys.length * keyWidth}px` }}
         >
+          {/* White Keys with Realistic 3D Ivory Gradient & Bevel */}
           {whiteKeys.map((note, index) => {
             const inRange = isInVocalRange(note.midi);
             const isSung = isSungNote(note.midi);
@@ -228,45 +308,53 @@ export const HorizontalPiano: React.FC<HorizontalPianoProps> = ({
                   left: `${index * keyWidth}px`,
                   width: `${keyWidth}px`,
                 }}
-                className={`absolute top-0 h-[190px] border-r border-slate-800/90 rounded-b-lg flex flex-col justify-end items-center pb-3 transition-colors ${
+                className={`absolute top-0 h-[196px] rounded-b-[4px] flex flex-col justify-end items-center pb-2.5 border-r border-[#cfd4de] transition-all active:translate-y-0.5 select-none ${
                   isSung
-                    ? 'bg-emerald-400 text-slate-950 ring-2 ring-emerald-300 shadow-lg shadow-emerald-500/50 z-20'
+                    ? 'bg-gradient-to-b from-emerald-100 via-emerald-300 to-emerald-500 text-slate-950 font-bold ring-2 ring-emerald-300 shadow-xl z-20'
                     : isPlayed
-                    ? 'bg-indigo-300 text-slate-950 z-20'
+                    ? `${themeConfig.keyWhiteActive} z-20`
                     : inRange
-                    ? 'bg-slate-100 hover:bg-indigo-50 text-slate-800 shadow-inner'
-                    : 'bg-slate-300/80 hover:bg-slate-200 text-slate-600 opacity-60'
+                    ? 'bg-gradient-to-b from-[#ffffff] via-[#f7f8fa] to-[#dfe3ea] text-slate-800 shadow-[inset_0_-4px_3px_rgba(0,0,0,0.14)] hover:brightness-[1.02]'
+                    : 'bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 text-slate-500 opacity-60'
                 }`}
               >
+                {/* Vocal Range Badges */}
                 {isLowest && (
-                  <span className="absolute top-2 px-1 py-0.5 rounded bg-blue-600 text-white text-[8px] font-bold shadow">
-                    MIN
+                  <span className="absolute top-2 px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[8px] font-black shadow">
+                    {t.minBadge}
                   </span>
                 )}
                 {isHighest && (
-                  <span className="absolute top-2 px-1 py-0.5 rounded bg-pink-600 text-white text-[8px] font-bold shadow">
-                    MAX
+                  <span className="absolute top-2 px-1.5 py-0.5 rounded-full bg-pink-600 text-white text-[8px] font-black shadow">
+                    {t.maxBadge}
                   </span>
                 )}
                 {isMiddle && !isLowest && !isHighest && (
-                  <span className="absolute top-2 px-1 py-0.5 rounded bg-indigo-600 text-white text-[8px] font-bold shadow">
-                    MID
+                  <span className="absolute top-2 px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[8px] font-black shadow">
+                    {t.midBadge}
                   </span>
                 )}
 
-                {showLabels && (
-                  <div className="flex flex-col items-center">
-                    <span className="font-bold text-xs tracking-tight">{formatNoteName(note, notation)}</span>
-                    <span className="text-[9px] opacity-75 font-mono">{Math.round(note.frequency)}</span>
-                  </div>
-                )}
+                {/* Note Label */}
+                <div className="flex flex-col items-center pointer-events-none mb-1">
+                  <span className="font-extrabold text-xs tracking-tight font-mono text-slate-800">
+                    {formatNoteName(note, notation)}
+                  </span>
+                  <span className="text-[9px] text-slate-500 font-mono">
+                    {Math.round(note.frequency)}
+                  </span>
+                </div>
+
+                {/* Bottom 3D Bevel Lip */}
+                <div className="w-[88%] h-[3px] bg-slate-400/30 rounded-full pointer-events-none" />
               </button>
             );
           })}
 
+          {/* Black Keys with Photo Specular Reflections & Beveled Facets */}
           {whiteKeys.map((whiteNote, index) => {
             const blackMidi = whiteNote.midi + 1;
-            const blackNote = allMidiNotes.find((n) => n.midi === blackMidi && n.name.includes('#'));
+            const blackNote = full88Keys.find((n) => n.midi === blackMidi && n.name.includes('#'));
             if (!blackNote) return null;
 
             const inRange = isInVocalRange(blackNote.midi);
@@ -274,6 +362,7 @@ export const HorizontalPiano: React.FC<HorizontalPianoProps> = ({
             const isPlayed = activeMidiNotes.has(blackNote.midi);
             const isLowest = profile.lowestNote.midi === blackNote.midi;
             const isHighest = profile.highestNote.midi === blackNote.midi;
+
             const blackWidth = Math.max(22, keyWidth * 0.62);
             const leftOffset = index * keyWidth + keyWidth - blackWidth / 2;
 
@@ -285,31 +374,68 @@ export const HorizontalPiano: React.FC<HorizontalPianoProps> = ({
                   left: `${leftOffset}px`,
                   width: `${blackWidth}px`,
                 }}
-                className={`absolute top-0 h-[115px] rounded-b-md z-30 flex flex-col justify-end items-center pb-2.5 transition-colors ${
+                className={`absolute top-0 h-[122px] rounded-b-[3px] z-30 flex flex-col justify-end items-center pb-2 transition-all active:translate-y-0.5 select-none shadow-[2px_5px_8px_rgba(0,0,0,0.7),_0_2px_4px_rgba(0,0,0,0.6)] ${
                   isSung
-                    ? 'bg-emerald-400 text-slate-950 ring-2 ring-emerald-300 shadow-xl shadow-emerald-500/60'
+                    ? 'bg-gradient-to-b from-emerald-500 via-emerald-600 to-emerald-800 text-white ring-2 ring-emerald-300'
                     : isPlayed
-                    ? 'bg-indigo-400 text-slate-950'
+                    ? `${themeConfig.keyBlackActive}`
                     : inRange
-                    ? 'bg-slate-900 border-x border-b border-indigo-500/40 shadow-md text-indigo-300'
-                    : 'bg-slate-950/90 border border-slate-800 text-slate-500 opacity-70'
+                    ? 'bg-gradient-to-b from-[#111113] via-[#1c1c20] to-[#111113] text-white/90 border-x border-black'
+                    : 'bg-[#18181b] opacity-60'
                 }`}
               >
+                {/* Double oval specular reflections matching user's photo */}
+                <div className="absolute bottom-5 left-0 right-0 flex justify-center gap-1 opacity-55 pointer-events-none">
+                  <div className="w-1.5 h-3.5 rounded-full bg-gradient-to-b from-white/90 to-transparent" />
+                  <div className="w-1.5 h-3.5 rounded-full bg-gradient-to-b from-white/90 to-transparent" />
+                </div>
+
+                {/* Bottom Beveled Front Facet of Black Key */}
+                <div className="w-[88%] h-2.5 bg-gradient-to-b from-[#3d3d46] to-[#1c1c20] rounded-b-[2px] mb-1 border-t border-white/10 shadow-inner pointer-events-none" />
+
                 {isLowest && (
-                  <span className="absolute top-1 text-[7px] text-blue-300 font-bold">MIN</span>
+                  <span className="absolute top-1 text-[7px] text-blue-300 font-bold">{t.minBadge}</span>
                 )}
                 {isHighest && (
-                  <span className="absolute top-1 text-[7px] text-pink-300 font-bold">MAX</span>
+                  <span className="absolute top-1 text-[7px] text-pink-300 font-bold">{t.maxBadge}</span>
                 )}
-                {showLabels && (
-                  <span className="text-[9px] font-bold font-mono">
-                    {formatNoteName(blackNote, notation)}
-                  </span>
-                )}
+                <span className="text-[9px] font-bold font-mono text-white/80">
+                  {formatNoteName(blackNote, notation)}
+                </span>
               </button>
             );
           })}
         </div>
+      </div>
+
+      {/* 
+        BOTTOM BAR: CLASSIC RED VELVET CUSHION (Exact as user's photo!)
+      */}
+      <div className={`w-full py-2.5 px-4 flex items-center justify-between text-xs ${themeConfig.cushionBg}`}>
+        <div className="flex items-center gap-2">
+          <span className={`font-serif tracking-widest text-sm ${themeConfig.cushionText}`}>
+            {language === 'ar' ? themeConfig.cushionTitleAr : themeConfig.cushionTitleEn}
+          </span>
+          <span className="text-[11px] text-white/70 font-mono hidden sm:inline">
+            • {profile.voiceType} ({formatNoteName(profile.lowestNote, notation)} – {formatNoteName(profile.highestNote, notation)})
+          </span>
+        </div>
+
+        {/* Live Sung Pitch or sing prompt */}
+        {currentPitch?.note ? (
+          <div className="flex items-center gap-2 bg-black/40 border border-white/20 text-white px-3 py-1 rounded-full font-mono text-xs animate-pulse">
+            <Mic className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="font-bold">{formatNoteName(currentPitch.note, notation)}</span>
+            <span>({Math.round(currentPitch.frequency || 0)} {t.hzUnit})</span>
+            <span className={currentPitch.isInTune ? 'text-emerald-400 font-bold' : 'text-amber-300'}>
+              {currentPitch.cents > 0 ? `+${currentPitch.cents}` : currentPitch.cents}¢
+            </span>
+          </div>
+        ) : (
+          <span className="text-[11px] text-white/70 italic hidden sm:inline">
+            {t.singPrompt}
+          </span>
+        )}
       </div>
     </div>
   );

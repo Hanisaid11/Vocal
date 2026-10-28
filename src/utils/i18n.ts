@@ -1,4 +1,4 @@
-import { AppLanguage, NotationSystem, InstrumentType } from '../types/vocal';
+import { AppLanguage, NotationSystem, InstrumentType, AppTheme } from '../types/vocal';
 
 export interface Translations {
   appName: string;
@@ -58,6 +58,19 @@ export interface Translations {
   intervalDesc: string;
   memoryTitle: string;
   memoryDesc: string;
+  earTrainerTitle: string;
+  earTrainerDesc: string;
+  pitchRecognitionTitle: string;
+  pitchRecognitionDesc: string;
+  pitchRecognitionGuide: string;
+  tooHigh: string;
+  tooLow: string;
+  tapKeyToIdentify: string;
+  targetPitchPlayed: string;
+  sirenGlideTitle: string;
+  sirenGlideDesc: string;
+  vocalAgilityTitle: string;
+  vocalAgilityDesc: string;
   playGame: string;
   score: string;
   streak: string;
@@ -70,6 +83,11 @@ export interface Translations {
   listenAnswer: string;
   correctNext: string;
   skipQuestion: string;
+  replaySound: string;
+  yourGuess: string;
+  correct: string;
+  incorrect: string;
+  showHint: string;
   warmupTitle: string;
   warmupDesc: string;
   practice: string;
@@ -90,12 +108,56 @@ export interface Translations {
   languageLabel: string;
   notationLabel: string;
   instrumentLabel: string;
+  themesLabel: string;
   referencePitch: string;
   tuningTolerance: string;
   hapticFeedback: string;
   keepScreenAwake: string;
   autoVerticalFs: string;
   close: string;
+  recordKeys: string;
+  recording: string;
+  playRecording: string;
+  stopRecording: string;
+  keySize: string;
+  octave: string;
+  semitones: string;
+  minBadge: string;
+  maxBadge: string;
+  midBadge: string;
+  hzUnit: string;
+  bpmUnit: string;
+  androidAppPrompt: string;
+  installGuideTitle: string;
+  aiCoach: string;
+  aiTrainerStepByStep: string;
+  aiCoachDesc: string;
+  stepNumber: string;
+  ofSteps: string;
+  nextStep: string;
+  prevStep: string;
+  repeatStep: string;
+  aiFeedback: string;
+  evaluating: string;
+  askCoach: string;
+  askCoachPlaceholder: string;
+  sendQuestion: string;
+  playReference: string;
+  pitchLockTarget: string;
+  breathPacer: string;
+  inhale: string;
+  hold: string;
+  exhale: string;
+  startBreath: string;
+  stepCompleted: string;
+  workoutCompleted: string;
+  curriculumFoundation: string;
+  curriculumPitch: string;
+  curriculumRange: string;
+  curriculumArabic: string;
+  selectCurriculum: string;
+  coachThinking: string;
+  getAiFeedback: string;
 }
 
 export const translations: Record<AppLanguage, Translations> = {
@@ -111,7 +173,7 @@ export const translations: Record<AppLanguage, Translations> = {
     settings: 'Settings',
     enableMic: 'Enable Mic',
     micActive: 'Mic Active',
-    installApp: 'Install App',
+    installApp: 'Install Android App',
     cloudSync: 'Cloud Sync',
     verticalPiano: 'Vertical (Android)',
     horizontalPiano: 'Horizontal',
@@ -157,6 +219,19 @@ export const translations: Record<AppLanguage, Translations> = {
     intervalDesc: 'Listen to the root note, then calculate and sing musical intervals (3rds, 4ths, 5ths, Octaves) using real song mnemonics.',
     memoryTitle: 'Note Memory Match',
     memoryDesc: 'Listen to a hidden reference tone, retain it in your mind, and sing the exact pitch from memory!',
+    earTrainerTitle: 'Piano Ear Pitch Guess',
+    earTrainerDesc: 'The piano plays a mystery sound. Guess the exact pitch by pressing the correct piano key to train your ear!',
+    pitchRecognitionTitle: 'Vertical Piano Pitch Recognition',
+    pitchRecognitionDesc: 'The app plays a mystery note from your active vocal range using Piano or Arabic Oud. Tap the exact key on the vertical piano!',
+    pitchRecognitionGuide: 'Listen carefully to the note played in your vocal compass, then tap the corresponding key on the vertical keyboard.',
+    tooHigh: 'Too High! (The note was lower)',
+    tooLow: 'Too Low! (The note was higher)',
+    tapKeyToIdentify: 'Tap any key on the vertical piano to submit your guess',
+    targetPitchPlayed: 'Mystery Note Played',
+    sirenGlideTitle: 'Sing Sharp: Siren & Pitch Glide',
+    sirenGlideDesc: 'Practice smooth glissando vocal slides along a continuous curve without vocal breaks or strain.',
+    vocalAgilityTitle: 'Vocalista: Agility & Scale Runs',
+    vocalAgilityDesc: 'Rapid 3-note, 5-note, and octave arpeggio agility runs to build speed, vocal stamina, and pitch accuracy.',
     playGame: 'Play Game',
     score: 'Score',
     streak: 'Streak',
@@ -169,6 +244,11 @@ export const translations: Record<AppLanguage, Translations> = {
     listenAnswer: 'Listen to Answer',
     correctNext: 'Correct! Next',
     skipQuestion: 'Skip Question',
+    replaySound: 'Replay Sound',
+    yourGuess: 'Your Guess',
+    correct: 'Correct!',
+    incorrect: 'Try Again!',
+    showHint: 'Hint',
     warmupTitle: 'Adaptive Warm-ups & Vocalises',
     warmupDesc: 'Auto-calibrated for your active vocal range',
     practice: 'Practice',
@@ -189,12 +269,56 @@ export const translations: Record<AppLanguage, Translations> = {
     languageLabel: 'App Language',
     notationLabel: 'Note Naming System',
     instrumentLabel: 'Reference Instrument Sound',
+    themesLabel: 'Visual Piano Theme',
     referencePitch: 'Concert Pitch Calibration (A4)',
     tuningTolerance: 'Tuning Tolerance (Cents)',
     hapticFeedback: 'Tactile Haptic Feedback (Android)',
     keepScreenAwake: 'Keep Screen Awake During Exercises',
     autoVerticalFs: 'Auto-Switch to Vertical Piano on Fullscreen',
     close: 'Close',
+    recordKeys: 'Record Keys',
+    recording: 'Recording...',
+    playRecording: 'Play Recording',
+    stopRecording: 'Stop Recording',
+    keySize: 'Key Size',
+    octave: 'octave',
+    semitones: 'semitones',
+    minBadge: 'MIN',
+    maxBadge: 'MAX',
+    midBadge: 'MID',
+    hzUnit: 'Hz',
+    bpmUnit: 'BPM',
+    androidAppPrompt: 'Install as Android PWA for full-screen immersive training',
+    installGuideTitle: 'Add to Home Screen (Android)',
+    aiCoach: 'AI Vocal Coach',
+    aiTrainerStepByStep: 'AI Vocal Coach (Step by Step)',
+    aiCoachDesc: 'Interactive step-by-step vocal workouts with real-time AI guidance',
+    stepNumber: 'Step',
+    ofSteps: 'of',
+    nextStep: 'Next Step',
+    prevStep: 'Previous Step',
+    repeatStep: 'Repeat Exercise',
+    aiFeedback: 'AI Coach Evaluation',
+    evaluating: 'AI Coach analyzing your vocal pitch and stability...',
+    askCoach: 'Ask Vocal Coach',
+    askCoachPlaceholder: 'Ask any vocal question (e.g., breath support, high notes, throat relaxation)...',
+    sendQuestion: 'Send Question',
+    playReference: 'Play Reference',
+    pitchLockTarget: 'Sustain your pitch in the green zone',
+    breathPacer: 'Diaphragmatic Breath Pacer',
+    inhale: 'Inhale (4s)',
+    hold: 'Hold (4s)',
+    exhale: 'Hiss Exhale (8s)',
+    startBreath: 'Start Breath Guide',
+    stepCompleted: 'Step Completed!',
+    workoutCompleted: 'Workout Completed!',
+    curriculumFoundation: '5-Step Vocal Foundation',
+    curriculumPitch: 'Pitch Precision & Ear Mastery',
+    curriculumRange: 'Range Expansion & Passaggio',
+    curriculumArabic: 'Arabic Maqam Vocalises & Ornaments',
+    selectCurriculum: 'Curriculum Routine',
+    coachThinking: 'AI Coach is analyzing...',
+    getAiFeedback: 'Get AI Coach Analysis',
   },
   ar: {
     appName: 'فوكال ماستر برو',
@@ -208,11 +332,11 @@ export const translations: Record<AppLanguage, Translations> = {
     settings: 'الإعدادات',
     enableMic: 'تشغيل المايك',
     micActive: 'المايك نشط',
-    installApp: 'تثبيت التطبيق',
+    installApp: 'تثبيت كتطبيق أندرويد',
     cloudSync: 'المزامنة السحابية',
     verticalPiano: 'رأسي (أندرويد)',
-    horizontalPiano: 'أفقي',
-    fullscreen: 'شاشة كاملة',
+    horizontalPiano: 'أفقي كلاسيكي',
+    fullscreen: 'ملء الشاشة',
     exitFullscreen: 'إنهاء الشاشة الكاملة',
     myRange: 'طبقتي الصوتية',
     fullRange: 'المدى الكامل C1–C7',
@@ -229,8 +353,8 @@ export const translations: Record<AppLanguage, Translations> = {
     centerMid: 'التوسيط على النغمة المتوسطة ←',
     singPrompt: 'غنِّ في الميكروفون لتضيء النغمة مباشرة',
     inTune: 'صحيح النغمة',
-    sharp: 'حاد (دييز)',
-    flat: 'هابط (بيمول)',
+    sharp: 'حاد (دييز ♯)',
+    flat: 'هابط (بيمول ♭)',
     voiceProfilerTitle: 'معالج تحليل وقياس المدى الصوتي',
     voiceProfilerDesc: 'قياس دقيق لطبقات صوتك ومداك الطبيعي',
     stepLowestTitle: 'غنِّ أخفض نغمة مريحة بالنسبة لك',
@@ -254,6 +378,19 @@ export const translations: Record<AppLanguage, Translations> = {
     intervalDesc: 'استمع للنغمة الأساسية، ثم احسب وغنِّ المسافة الموسيقية (الثالثة، الرابعة، الخامسة، الأوكتاف).',
     memoryTitle: 'تطابق الذاكرة السمعية',
     memoryDesc: 'استمع إلى نغمة مرجعية، احفظها في ذاكرتك، ثم غنِّ النغمة المطابقة بدقة بعد اختفائها!',
+    earTrainerTitle: 'تحدي تخمين النغمات بالسمع على البيانو',
+    earTrainerDesc: 'يعزف البيانو نغمة غامضة. استمع جيداً وخمن النغمة الصحيحة بالضغط على مفتاح البيانو لتدريب أذنك الموسيقية!',
+    pitchRecognitionTitle: 'لعبة التعرف على النغمات على البيانو الرأسي',
+    pitchRecognitionDesc: 'يعزف التطبيق نغمة عشوائية من مساحتك الصوتية بالبيانو أو العود العربي. اضغط على المفتاح المطابق على البيانو الرأسي!',
+    pitchRecognitionGuide: 'استمع بدقة للنغمة الصادرة داخل مساحتك الصوتية، ثم انقر على المفتاح الصحيح في لوحة البيانو الرأسي لتحديدها.',
+    tooHigh: 'نغمتك المختارة أعلى! (النغمة الصحيحة أخفض)',
+    tooLow: 'نغمتك المختارة أخفض! (النغمة الصحيحة أعلى)',
+    tapKeyToIdentify: 'اضغط على أي مفتاح في البيانو الرأسي لتأكيد تخمينك',
+    targetPitchPlayed: 'تم عزف النغمة المستهدفة',
+    sirenGlideTitle: 'تمرين السيرين والانزلاق الصوتي (سينغ شارب)',
+    sirenGlideDesc: 'تدريب الانتقال الانسيابي بين الطبقات الصوتية على مسار منحنٍ متصل دون انقطاع أو شد حنجري.',
+    vocalAgilityTitle: 'تمارين الركض والسرعة الصوتية (فوكاليستا)',
+    vocalAgilityDesc: 'أنماط لحنية سريعة وأربيجيو متتالي لتقوية المرونة وسرعة الأوتار الصوتية والدقة اللحظية.',
     playGame: 'ابدأ اللعبة',
     score: 'النقاط',
     streak: 'التتابع المتتالي',
@@ -266,6 +403,11 @@ export const translations: Record<AppLanguage, Translations> = {
     listenAnswer: 'الاستماع للجواب',
     correctNext: 'صحيح! التالي',
     skipQuestion: 'تخطي السؤال',
+    replaySound: 'إعادة سماع النغمة 🔁',
+    yourGuess: 'تخمينك',
+    correct: 'صحيح أحسنت! 🎉',
+    incorrect: 'محاولة خاطئة، جرّب مجدداً!',
+    showHint: 'إظهار تلميح',
     warmupTitle: 'تمارين الإحماء والفوكاليز التكيفية',
     warmupDesc: 'مولدة تلقائياً بما يتناسب مع حدود طبقتك الصوتية',
     practice: 'تمرين',
@@ -273,7 +415,7 @@ export const translations: Record<AppLanguage, Translations> = {
     pauseWarmup: 'إيقاف مؤقت',
     saveExit: 'حفظ وخروج',
     recommendedVowel: 'حرف المد الموصى به',
-    tempo: 'السرعة (BPM)',
+    tempo: 'السرعة',
     direction: 'الاتجاه',
     pitchAccuracy: 'دقة النغمة',
     practiceStreak: 'أيام التمرين المتتالية',
@@ -286,21 +428,65 @@ export const translations: Record<AppLanguage, Translations> = {
     languageLabel: 'لغة التطبيق',
     notationLabel: 'نظام تسمية النوتات الموسيقية',
     instrumentLabel: 'صوت الآلة المرجعية',
+    themesLabel: 'مظهر وسمة البيانو',
     referencePitch: 'معايرة تردد النغمة المرجعية A4',
-    tuningTolerance: 'سماحية الدقة بالنغمات (بالسنت Cents)',
+    tuningTolerance: 'سماحية الدقة بالنغمات (بالسنت)',
     hapticFeedback: 'الاهتزاز اللمسي على أندرويد (Haptics)',
     keepScreenAwake: 'منع قفل الشاشة أثناء التمارين',
     autoVerticalFs: 'التحويل التلقائي للبيانو الرأسي عند ملء الشاشة',
     close: 'إغلاق',
+    recordKeys: 'تسجيل العزف',
+    recording: 'جاري التسجيل...',
+    playRecording: 'تشغيل التسجيل',
+    stopRecording: 'إيقاف التسجيل',
+    keySize: 'حجم المفاتيح',
+    octave: 'أوكتاف',
+    semitones: 'أنصاف أبعاد',
+    minBadge: 'الأدنى',
+    maxBadge: 'الأقصى',
+    midBadge: 'الوسط',
+    hzUnit: 'هرتز',
+    bpmUnit: 'ن/د',
+    androidAppPrompt: 'ثبّت التطبيق على شاشة هاتفك الأندرويد لاستخدامه بملء الشاشة',
+    installGuideTitle: 'إضافة التطبيق إلى الشاشة الرئيسية (أندرويد)',
+    aiCoach: 'المدرب الصوتي الذكي',
+    aiTrainerStepByStep: 'المدرب الصوتي الذكي (خطوة بخطوة)',
+    aiCoachDesc: 'تمارين صوتية تفاعلية خطوة بخطوة مع توجيه وتحليل صوتي فوري بالذكاء الاصطناعي',
+    stepNumber: 'الخطوة',
+    ofSteps: 'من',
+    nextStep: 'الخطوة التالية',
+    prevStep: 'الخطوة السابقة',
+    repeatStep: 'إعادة التمرين',
+    aiFeedback: 'تقييم المدرب الذكي',
+    evaluating: 'المدرب يحلل نبرتك واستقرار طبقتك الصوتية بالذكاء الاصطناعي...',
+    askCoach: 'اسأل المدرب الصوتي',
+    askCoachPlaceholder: 'اسأل عن تقنيات التنفس، إرخاء الحنجرة، أو النغمات العالية...',
+    sendQuestion: 'إرسال السؤال',
+    playReference: 'سماع النغمة المرجعية',
+    pitchLockTarget: 'ثبّت نغمتك داخل المنطقة الخضراء',
+    breathPacer: 'موجه التنفس الحجابي المنتظم',
+    inhale: 'شهيق (4 ثوانٍ)',
+    hold: 'كتم وثبات (4 ثوانٍ)',
+    exhale: 'زفير همسي سسسس (8 ثوانٍ)',
+    startBreath: 'بدء تمرين التنفس',
+    stepCompleted: 'تم إكمال الخطوة بنجاح!',
+    workoutCompleted: 'أحسنت! تم إنهاء الحصة بنجاح!',
+    curriculumFoundation: 'برنامج الأساس الصوتي (5 خطوات)',
+    curriculumPitch: 'دقة النغمات وتدريب الأذن',
+    curriculumRange: 'توسيع الطبقات ودمج المقامات',
+    curriculumArabic: 'فوكاليز المقامات والزخارف العربية',
+    selectCurriculum: 'البرنامج التدريبي',
+    coachThinking: 'جاري استشارة المدرب الصوتي الذكي...',
+    getAiFeedback: 'تحليل الأداء بالذكاء الاصطناعي',
   },
 };
 
 export const INSTRUMENT_NAMES: Record<InstrumentType, { en: string; ar: string; icon: string }> = {
-  piano: { en: 'Grand Piano', ar: 'بيانو كلاسيكي', icon: '🎹' },
-  oud: { en: 'Arabic Oud', ar: 'عود عربي أصيل', icon: '🪕' },
-  guitar: { en: 'Acoustic Guitar', ar: 'غيتار صوتي', icon: '🎸' },
-  vocal: { en: 'Pure Vocal Tone', ar: 'صوت بشري نقي', icon: '🎤' },
-  strings: { en: 'Strings / Cello', ar: 'تشيلو ووتريات', icon: '🎻' },
+  piano: { en: 'Concert Grand Piano', ar: 'بيانو غراند كلاسيكي', icon: '🎹' },
+  oud: { en: 'Acoustic Arabic Oud', ar: 'عود عربي أصيل بأوتار مزدوجة', icon: '🪕' },
+  guitar: { en: 'Acoustic Nylon Guitar', ar: 'غيتار نايلون صوتي', icon: '🎸' },
+  vocal: { en: 'Pure Human Vocal Tone', ar: 'صوت بشري طبيعي نقي', icon: '🎤' },
+  strings: { en: 'Bowed Strings / Cello', ar: 'تشيلو ووتريات أوركسترا', icon: '🎻' },
 };
 
 export const NOTATION_OPTIONS: Record<NotationSystem, { en: string; ar: string; example: string }> = {

@@ -15,6 +15,7 @@ export type VoiceClassification =
 export type NotationSystem = 'english' | 'solfege' | 'arabic';
 export type InstrumentType = 'piano' | 'guitar' | 'oud' | 'vocal' | 'strings';
 export type AppLanguage = 'en' | 'ar';
+export type AppTheme = 'classic-piano' | 'dark-studio' | 'oriental-oud' | 'midnight-stage';
 
 export interface NoteInfo {
   name: string;        // e.g. "C", "F#"
@@ -83,7 +84,7 @@ export interface PracticeSessionRecord {
 
 export interface PitchGameRecord {
   id: string;
-  gameType: 'pitch_hero' | 'match_note' | 'interval_challenge';
+  gameType: 'pitch_hero' | 'match_note' | 'interval_challenge' | 'ear_trainer' | 'siren_glide' | 'vocal_agility' | 'pitch_recognition';
   score: number;
   highestStreak: number;
   accuracyPercentage: number;
@@ -102,6 +103,7 @@ export interface UserStats {
   highScorePitchHero: number;
   highScoreMatchNote: number;
   highScoreInterval: number;
+  highScorePitchRecognition?: number;
   sessions: PracticeSessionRecord[];
   gameRecords: PitchGameRecord[];
 }
